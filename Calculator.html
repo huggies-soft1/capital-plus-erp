@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --primary: #2563eb; --primary-hover: #1d4ed8;
+      --danger: #ef4444; --danger-hover: #dc2626;
+      --success: #16a34a; --success-hover: #15803d;
+      --amber: #d97706; --amber-bg: #fffbeb;
+      --text-main: #0f172a; --text-muted: #64748b;
+      --bg-body: #f8fafc; --bg-card: #ffffff;
+      --border: #e2e8f0; --radius: 10px;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; margin: 0; color: var(--text-main); background-color: var(--bg-body); }
+    .card { background: var(--bg-card); border-radius: var(--radius); padding: 12px; border: 1px solid var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.04); margin-bottom: 10px; }
+    label { display: block; font-size: 10px; font-weight: 700; margin-top: 8px; margin-bottom: 3px; color: #475569; text-transform: uppercase; letter-spacing: 0.4px;}
+
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; outline: none; background: #fff; font-family: inherit;
+    }
+    input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,0.1); }
+
+    .search-box { margin-bottom: 8px; position: relative; }
+    .search-box input { padding-left: 28px; font-weight: 500; }
+    .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #94a3b8; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 10px; background: #e2e8f0; padding: 4px; border-radius: 8px;}
+    .tab-btn { flex: 1; padding: 7px 4px; font-size: 11px; font-weight: 800; text-align: center; cursor: pointer; border-radius: 6px; transition: all 0.2s; color: #64748b; white-space: nowrap;}
+    .tab-btn.active-deduct { background: #fff; color: var(--danger); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .tab-btn.active-add { background: #fff; color: var(--success); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .tab-btn.active-restore { background: #fff; color: var(--amber); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+    .pipe-list { max-height: 195px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; padding-right: 3px; }
+    .section-divider { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; background: #f1f5f9; padding: 5px 8px; border-radius: 5px; margin-top: 4px; }
+    .pipe-card { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s ease; user-select: none; }
+    .pipe-card:hover { border-color: #94a3b8; background: #f8fafc;}
+    .pipe-card.selected { border-color: var(--primary); background: #eff6ff; box-shadow: 0 0 0 1px var(--primary); }
+    .pipe-card.alt-card { border-style: dashed; background: #fcfcfd; }
+
+    .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800; text-transform: uppercase;}
+    .badge-new { background: #dcfce7; color: #166534; }
+    .badge-restored { background: #ffedd5; color: #9a3412; }
+    .badge-stale { background: #e0e7ff; color: #3730a3; }
+    .badge-used { background: #f1f5f9; color: #475569; }
+    .badge-hint { background: #fef3c7; color: #92400e; font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: 800; }
+
+    .margin-bar {
+      display: none;
+      margin-top: 6px;
+      padding: 7px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .margin-bar.ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .margin-bar.warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .margin-bar.stop { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn { width: 100%; padding: 10px; font-size: 12px; font-weight: 700; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+    .btn-add-to-cart { background: var(--primary); color: #fff; margin-top: 10px; }
+    .btn-add-to-cart:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-deduct { background: var(--danger); color: #fff; margin-top: 8px; }
+    .btn-receive { background: var(--success); color: #fff; margin-top: 8px; }
+    .btn-restore { background: var(--amber); color: #fff; margin-top: 8px; }
+    .btn-copy-kp { background: #0f172a; color: #fff; margin-top: 6px; font-size: 12px; padding: 9px; }
+    .btn-new-pipe { background: #f1f5f9; color: #334155; border: 1px dashed #cbd5e1; margin-top: 4px; margin-bottom: 8px; font-size: 11px; padding: 8px;}
+
+    #newPipeForm, #restoreConfigBox { display: none; background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; margin-top: 8px; }
+    .close-form { text-align: right; font-size: 11px; color: var(--danger); cursor: pointer; font-weight: 700; margin-bottom: 4px;}
+
+    .cart-title { font-size: 13px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .clear-btn { cursor: pointer; color: #94a3b8; font-size: 11px; font-weight: 600;}
+    .cart-item { background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin-top: 6px; position: relative; font-size: 11.5px; }
+    .del-btn { position: absolute; top: 5px; right: 6px; cursor: pointer; color: #94a3b8; font-weight: bold; font-size: 13px; padding: 2px; }
+    .del-btn:hover { color: var(--danger); }
+
+    .summary-card { margin-top: 10px; padding: 10px; background: #f1f5f9; border-radius: 6px; }
+    .sum-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; font-weight: 500;}
+    .truck-tag { margin-top: 6px; background: #dbeafe; border: 1px solid #bfdbfe; color: #1e40af; padding: 6px; border-radius: 6px; font-size: 11px; text-align: center; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <div class="tabs">
+    <div class="tab-btn active-deduct" id="tabDeduct" onclick="switchMode('deduct')">🔴 ОТГРУЗКА</div>
+    <div class="tab-btn" id="tabAdd" onclick="switchMode('add')">🟢 ПРИЁМКА</div>
+    <div class="tab-btn" id="tabRestore" onclick="switchMode('restore')">⚙️ ВОССТ. (ЦЕХ)</div>
+  </div>
+
+  <div class="card">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="pipeSearch" placeholder="Например: 530х8, 630, нефть..." autocomplete="off" onkeyup="filterSelect()">
+    </div>
+
+    <button class="btn btn-new-pipe" id="btnShowNewForm" style="display:none;" onclick="toggleNewForm(true)">➕ Создать новую позицию на складе</button>
+
+    <div id="newPipeForm">
+      <div class="close-form" onclick="toggleNewForm(false)">✕ Отмена</div>
+      <div class="grid-2">
+        <div><label>Диаметр:</label><input type="number" id="newDiam" placeholder="530"></div>
+        <div><label>Стенка:</label><input type="number" id="newWall" placeholder="8"></div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Категория:</label>
+          <select id="newCat">
+            <option value="ЭСВ">ЭСВ</option>
+            <option value="Спиральношовная">Спиральношовная</option>
+            <option value="НКТ">НКТ</option>
+            <option value="ВГП">ВГП</option>
+            <option value="Бесшовная">Бесшовная</option>
+          </select>
+        </div>
+        <div>
+          <label>Состояние:</label>
+          <select id="newCond">
+            <option value="Новая">Новая</option>
+            <option value="Восстановленная">Восстановленная</option>
+            <option value="Лежалая">Лежалая</option>
+            <option value="Б/у">Б/у</option>
+          </select>
+        </div>
+      </div>
+
+      <label>ГОСТ / Сырье:</label>
+      <select id="newGost">
+        <option value="Нефть">Нефть</option>
+        <option value="Вода">Вода</option>
+        <option value="Метал">Метал</option>
+        <option value="Газ">Газ</option>
+        <option value="Пар">Пар</option>
+        <option value="ГОСТ 10704-91">ГОСТ 10704-91</option>
+        <option value="ГОСТ 8732-78">ГОСТ 8732-78</option>
+        <option value="—">Без ГОСТа (—)</option>
+      </select>
+
+      <div class="grid-2">
+        <div><label>Закупка (₽/тн):</label><input type="number" id="newBuyPrice" placeholder="45000"></div>
+        <div><label>Продажа (₽/тн):</label><input type="number" id="newSellPrice" placeholder="55000"></div>
+      </div>
+    </div>
+
+    <div id="pipeList" class="pipe-list">
+      <div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">⏳ Загрузка склада...</div>
+    </div>
+
+    <!-- Блок цены сделки (для Отгрузки и Приёмки) -->
+    <div id="dealPriceBox">
+      <label id="priceInputLabel" for="dealPriceInput">Цена сделки (₽/тн):</label>
+      <input type="number" id="dealPriceInput" placeholder="Выберите позицию..." oninput="updateMarginPreview()">
+      <div id="marginBar" class="margin-bar"></div>
+    </div>
+
+    <!-- Блок параметров переработки Б/у ➔ Восстановленная (для вкладки ЦЕХ) -->
+    <div id="restoreConfigBox">
+      <div style="font-size:11px; font-weight:800; color:#9a3412; margin-bottom:4px;">⚙️ ПАРАМЕТРЫ НА ВЫХОДЕ (ВОССТАНОВЛЕННАЯ):</div>
+      <div class="grid-2">
+        <div>
+          <label>База Б/у (Закупка):</label>
+          <input type="number" id="restBaseBuy" placeholder="40000" oninput="updateRestoreMath()">
+        </div>
+        <div>
+          <label>Работа/Пескоструй (₽/тн):</label>
+          <input type="number" id="restServiceCost" value="7000" oninput="updateRestoreMath()">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Категория на выходе:</label>
+          <select id="restTargetCat">
+            <option value="ЭСВ">ЭСВ</option>
+            <option value="Спиральношовная">Спиральношовная</option>
+            <option value="Бесшовная">Бесшовная</option>
+            <option value="НКТ">НКТ</option>
+            <option value="ВГП">ВГП</option>
+          </select>
+        </div>
+        <div>
+          <label>Сырье / ГОСТ:</label>
+          <select id="restTargetGost">
+            <option value="Газ">Газ</option>
+            <option value="Вода">Вода</option>
+            <option value="Нефть">Нефть</option>
+            <option value="Пар">Пар</option>
+            <option value="Метал">Метал</option>
+            <option value="ГОСТ 10704-91">ГОСТ 10704-91</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label>Новая Продажа (₽/тн):</label>
+          <input type="number" id="restTargetSell" placeholder="60000" oninput="updateRestoreMath()">
+        </div>
+        <div>
+          <label>Примечание:</label>
+          <input type="text" id="restTargetNotes" value="Пескоструй, фаска">
+        </div>
+      </div>
+      <div id="restoreMathBar" class="margin-bar ok" style="display:block; margin-top:8px;">
+        Выберите трубу Б/у из списка выше...
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div><label for="metersInput">Длина (м):</label><input type="number" id="metersInput" placeholder="0.0" min="0" step="any" oninput="fromMeters()"></div>
+      <div><label for="tonsInput">Вес (тн):</label><input type="number" id="tonsInput" placeholder="0.000" min="0" step="any" oninput="fromTons()"></div>
+    </div>
+
+    <button class="btn btn-add-to-cart" id="btnAddToCart" onclick="addToCart()">В буфер операций</button>
+  </div>
+
+  <div class="card" id="cartBox" style="display:none;">
+    <div class="cart-title">
+      <span>Буфер операций (<span id="cartCount">0</span>)</span>
+      <span class="clear-btn" onclick="clearCart()">Очистить</span>
+    </div>
+
+    <div id="cartItems"></div>
+
+    <div class="summary-card" id="sumCard">
+      <div class="sum-row"><span>Общий вес:</span><strong id="totalTons">0 тн</strong></div>
+      <div class="sum-row" id="sumCostRow"><span>Сумма:</span><strong id="totalCost">0 ₽</strong></div>
+      <div class="sum-row" id="sumMarginRow" style="display:none; color:#166534;"><span>Чистая маржа:</span><strong id="totalMargin">+0 ₽</strong></div>
+      <div class="truck-tag" id="truckBadge">🚛 Транспорт: уточняется</div>
+    </div>
+
+    <button class="btn btn-copy-kp" id="btnCopyOffer" onclick="copyOffer()">📋 Скопировать КП для клиента</button>
+    <button class="btn btn-deduct" id="executeBtn" onclick="executeOperation()">➖ Оформить списание</button>
+  </div>
+
+  <script>
+    let inventory = [];
+    let cart = [];
+    let selectedIdx = null;
+    let currentMode = 'deduct'; // 'deduct' | 'add' | 'restore'
+    let isCreatingNew = false;
+
+    window.onload = function() {
+      loadInventory();
+    };
+
+    function switchMode(mode) {
+      currentMode = mode;
+      selectedIdx = null;
+
+      document.getElementById('tabDeduct').className = (mode === 'deduct') ? 'tab-btn active-deduct' : 'tab-btn';
+      document.getElementById('tabAdd').className = (mode === 'add') ? 'tab-btn active-add' : 'tab-btn';
+      document.getElementById('tabRestore').className = (mode === 'restore') ? 'tab-btn active-restore' : 'tab-btn';
+
+      const btnExec = document.getElementById('executeBtn');
+      const priceLabel = document.getElementById('priceInputLabel');
+      const dealBox = document.getElementById('dealPriceBox');
+      const restoreBox = document.getElementById('restoreConfigBox');
+
+      if (mode === 'deduct') {
+        btnExec.className = 'btn btn-deduct';
+        btnExec.innerText = '➖ Оформить списание';
+        priceLabel.innerText = 'Цена сделки (₽/тн):';
+        dealBox.style.display = 'block';
+        restoreBox.style.display = 'none';
+        document.getElementById('btnShowNewForm').style.display = 'none';
+        document.getElementById('btnCopyOffer').style.display = 'flex';
+        toggleNewForm(false);
+      } else if (mode === 'add') {
+        btnExec.className = 'btn btn-receive';
+        btnExec.innerText = '➕ Оприходовать на склад';
+        priceLabel.innerText = 'Закупка партии (₽/тн, необяз.):';
+        dealBox.style.display = 'block';
+        restoreBox.style.display = 'none';
+        document.getElementById('btnShowNewForm').style.display = 'block';
+        document.getElementById('btnCopyOffer').style.display = 'none';
+      } else if (mode === 'restore') {
+        btnExec.className = 'btn btn-restore';
+        btnExec.innerText = '⚙️ Перевести Б/у ➔ Восстановленная';
+        dealBox.style.display = 'none';
+        restoreBox.style.display = 'block';
+        document.getElementById('btnShowNewForm').style.display = 'none';
+        document.getElementById('btnCopyOffer').style.display = 'none';
+        toggleNewForm(false);
+      }
+
+      clearCart();
+      filterSelect();
+      updateMarginPreview();
+    }
+
+    function toggleNewForm(show) {
+      isCreatingNew = show;
+      document.getElementById('newPipeForm').style.display = show ? 'block' : 'none';
+      document.getElementById('pipeList').style.display = show ? 'none' : 'flex';
+      document.getElementById('dealPriceBox').style.display = show ? 'none' : (currentMode === 'restore' ? 'none' : 'block');
+      document.getElementById('btnShowNewForm').style.display = show ? 'none' : (currentMode === 'add' ? 'block' : 'none');
+
+      if (show) {
+        selectedIdx = null;
+        document.getElementById("metersInput").value = "";
+        document.getElementById("tonsInput").value = "";
+        document.getElementById("metersInput").disabled = true;
+        document.getElementById("metersInput").placeholder = "Авто-расчет";
+        document.getElementById("btnAddToCart").disabled = false;
+      } else {
+        document.getElementById("metersInput").disabled = false;
+        document.getElementById("metersInput").placeholder = "0.0";
+      }
+    }
+
+    function loadInventory() {
+      const list = document.getElementById("pipeList");
+      list.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">⏳ Загрузка склада...</div>';
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          inventory = Array.isArray(data) ? data : [];
+          filterSelect();
+        })
+        .withFailureHandler(function(err) {
+          list.innerHTML = '<div style="padding:10px; text-align:center; color:#ef4444; font-size:12px; font-weight:700;">❌ Ошибка сервера: ' + err.message + '</div>';
+        })
+        .getPipesData();
+    }
+
+    function getBadgeClass(cond) {
+      const lower = (cond || '').toLowerCase();
+      if (lower.includes('нов')) return 'badge-new';
+      if (lower.includes('восс') || lower.includes('вост')) return 'badge-restored';
+      if (lower.includes('леж')) return 'badge-stale';
+      return 'badge-used';
+    }
+
+    function createPipeCardElement(p, hintBadgeText, isAlt) {
+      const origIndex = inventory.findIndex(item => item.rowIndex === p.rowIndex);
+      const stockText = p.stockM > 0 ? `${p.stockM} м (~${p.stockTn} т)` : 'Нет';
+      const condText = p.condition || 'Б/у';
+      const gostHtml = p.gost && p.gost !== '—' ? `<span style="color:#2563eb;">${p.gost}</span> | ` : '';
+      const priceTag = p.priceTn > 0 ? `${p.priceTn.toLocaleString('ru-RU')} ₽` : '—';
+      const isSelected = (selectedIdx === origIndex);
+
+      const hintHtml = hintBadgeText ? `<span class="badge-hint">${hintBadgeText}</span> ` : '';
+
+      const card = document.createElement("div");
+      card.className = "pipe-card" + (isSelected ? " selected" : "") + (isAlt ? " alt-card" : "");
+      card.onclick = () => selectPipe(origIndex);
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+          <strong style="font-size:12.5px; color:#0f172a;">${p.name}</strong>
+          <div>${hintHtml}<span class="badge ${getBadgeClass(condText)}">${condText}</span></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; color:#64748b;">
+          <span>${p.category} | ${gostHtml}${stockText}</span>
+          <span style="color:#0f172a; font-weight:800;">${priceTag}</span>
+        </div>`;
+      return card;
+    }
+
+    /**
+     * Умный поиск + Подборщик альтернатив (Б/у под восстановление + соседние стенки)
+     */
+    function filterSelect() {
+      const rawQuery = document.getElementById("pipeSearch").value.toLowerCase().trim();
+      const query = rawQuery.replace(/[x*]/g, 'х');
+      const list = document.getElementById("pipeList");
+      list.innerHTML = '';
+
+      let pool = inventory;
+      if (currentMode === 'restore') {
+        pool = inventory.filter(p => (p.condition || '').toLowerCase().includes('б/у') && p.stockM > 0);
+      }
+
+      if (!query) {
+        if (pool.length === 0) {
+          list.innerHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;">Нет подходящих позиций</div>';
+          return;
+        }
+        pool.forEach(p => list.appendChild(createPipeCardElement(p, '', false)));
+        return;
+      }
+
+      // 1. Точные совпадения
+      const exactMatches = pool.filter(p =>
+        p.name.toLowerCase().replace(/x/g, 'х').includes(query) ||
+        p.category.toLowerCase().includes(query) ||
+        (p.condition && p.condition.toLowerCase().includes(query)) ||
+        (p.gost && p.gost.toLowerCase().includes(query))
+      );
+
+      if (exactMatches.length > 0) {
+        const hdr = document.createElement("div");
+        hdr.className = "section-divider";
+        hdr.textContent = `🟢 Точное совпадение (${exactMatches.length})`;
+        list.appendChild(hdr);
+        exactMatches.forEach(p => list.appendChild(createPipeCardElement(p, '', false)));
+      }
+
+      // 2. Умный подбор аналогов (если ищут диаметр/стенку в режиме Отгрузки)
+      if (currentMode === 'deduct') {
+        const sizeMatch = query.match(/(\d{2,4})(?:\s*х\s*(\d+(?:[.,]\d+)?))?/);
+        if (sizeMatch) {
+          const targetDiam = parseFloat(sizeMatch[1]);
+          const targetWall = sizeMatch[2] ? parseFloat(sizeMatch[2].replace(',', '.')) : null;
+          const exactRowIds = new Set(exactMatches.map(x => x.rowIndex));
+
+          const alternatives = inventory.filter(p => {
+            if (p.stockM <= 0) return false;
+            if (exactRowIds.has(p.rowIndex)) return false;
+            if (p.diam !== targetDiam) return false;
+            if (targetWall !== null) {
+              return Math.abs(p.wall - targetWall) <= 2.5;
+            }
+            return true;
+          });
+
+          if (alternatives.length > 0) {
+            const altHdr = document.createElement("div");
+            altHdr.className = "section-divider";
+            altHdr.textContent = `🔄 Аналоги Ø${targetDiam} в наличии и Б/у под цех (${alternatives.length})`;
+            list.appendChild(altHdr);
+
+            alternatives.forEach(p => {
+              const isUsed = (p.condition || '').toLowerCase().includes('б/у');
+              let hint = '';
+              if (isUsed) hint = '🛠️ Можно восст.';
+              else if (targetWall && p.wall !== targetWall) hint = `📐 Стенка ${p.wall}`;
+              list.appendChild(createPipeCardElement(p, hint, true));
+            });
+          }
+        }
+      }
+
+      if (list.children.length === 0) {
+        list.innerHTML = '<div style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;">Ничего не найдено</div>';
+      }
+    }
+
+    function selectPipe(index) {
+      selectedIdx = index;
+      const p = inventory[selectedIdx];
+      filterSelect();
+
+      if (currentMode === 'deduct') {
+        document.getElementById("dealPriceInput").value = p.priceTn > 0 ? p.priceTn : "";
+        updateMarginPreview();
+      } else if (currentMode === 'add') {
+        document.getElementById("dealPriceInput").value = p.buyPriceTn > 0 ? p.buyPriceTn : "";
+      } else if (currentMode === 'restore') {
+        const existingRestored = inventory.find(x =>
+          x.diam === p.diam && x.wall === p.wall && (x.condition || '').toLowerCase().includes('восст')
+        );
+        document.getElementById("restBaseBuy").value = p.buyPriceTn > 0 ? p.buyPriceTn : (p.priceTn > 0 ? p.priceTn - 5000 : 45000);
+        document.getElementById("restTargetCat").value = p.category || 'ЭСВ';
+        document.getElementById("restTargetGost").value = (existingRestored && existingRestored.gost && existingRestored.gost !== '—') ? existingRestored.gost : (p.gost || 'Газ');
+        document.getElementById("restTargetSell").value = (existingRestored && existingRestored.priceTn > 0) ? existingRestored.priceTn : (p.priceTn + 8000);
+        updateRestoreMath();
+      }
+
+      if (parseFloat(document.getElementById("metersInput").value) > 0) fromMeters();
+      else if (parseFloat(document.getElementById("tonsInput").value) > 0) fromTons();
+    }
+
+    function updateRestoreMath() {
+      const bar = document.getElementById("restoreMathBar");
+      if (selectedIdx === null) return;
+      const baseBuy = parseFloat(document.getElementById("restBaseBuy").value) || 0;
+      const workCost = parseFloat(document.getElementById("restServiceCost").value) || 0;
+      const newSell = parseFloat(document.getElementById("restTargetSell").value) || 0;
+      const newCost = baseBuy + workCost;
+      const margin = newSell - newCost;
+
+      if (margin < 3000) {
+        bar.className = "margin-bar stop";
+        bar.innerHTML = `⛔ Новая себестоимость: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа: ${margin.toLocaleString('ru-RU')} ₽/тн (Ниже Стоп-Лосса!)`;
+      } else {
+        bar.className = "margin-bar ok";
+        bar.innerHTML = `✅ Новая Закупка Восст.: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа при продаже: <strong>+${margin.toLocaleString('ru-RU')} ₽/тн</strong>`;
+      }
+    }
+
+    function updateMarginPreview() {
+      const bar = document.getElementById("marginBar");
+      const btnAdd = document.getElementById("btnAddToCart");
+
+      if (isCreatingNew || selectedIdx === null || currentMode !== 'deduct') {
+        bar.style.display = 'none';
+        btnAdd.disabled = false;
+        return;
+      }
+
+      const p = inventory[selectedIdx];
+      const buyTn = p.buyPriceTn || 0;
+      const sellTn = parseFloat(document.getElementById("dealPriceInput").value) || 0;
+      const minMargin = p.minMarginPerTon || 3000;
+
+      bar.style.display = 'block';
+
+      if (buyTn <= 0) {
+        bar.className = 'margin-bar warn';
+        bar.innerHTML = `⚠️ Закупка не указана в колонке G | Продажа: ${sellTn.toLocaleString('ru-RU')} ₽/тн`;
+        btnAdd.disabled = false;
+        return;
+      }
+
+      const diff = sellTn - buyTn;
+      const pct = ((diff / buyTn) * 100).toFixed(1);
+
+      if (diff < minMargin) {
+        bar.className = 'margin-bar stop';
+        bar.innerHTML =
+          `⛔ <strong>СТОП-ЛОСС!</strong> Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн<br>` +
+          `Маржа: ${diff.toLocaleString('ru-RU')} ₽/тн (${pct}%) — ниже порога ${minMargin.toLocaleString('ru-RU')} ₽/тн!`;
+        btnAdd.disabled = true;
+      } else {
+        bar.className = 'margin-bar ok';
+        bar.innerHTML =
+          `✅ Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн | ` +
+          `Маржа: <strong>+${diff.toLocaleString('ru-RU')} ₽/тн (+${pct}%)</strong>`;
+        btnAdd.disabled = false;
+      }
+    }
+
+    function fromMeters() {
+      if (isCreatingNew || selectedIdx === null) return;
+      const p = inventory[selectedIdx];
+      const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
+      const tn = (m * p.weightPerMeterKg) / 1000;
+      document.getElementById("tonsInput").value = tn > 0 ? tn.toFixed(3) : "";
+    }
+
+    function fromTons() {
+      if (isCreatingNew || selectedIdx === null) return;
+      const p = inventory[selectedIdx];
+      const tn = Math.max(0, parseFloat(document.getElementById("tonsInput").value) || 0);
+      const m = p.weightPerMeterKg > 0 ? (tn * 1000) / p.weightPerMeterKg : 0;
+      document.getElementById("metersInput").value = m > 0 ? m.toFixed(1) : "";
+    }
+
+    function getTruckRecommendation(tons) {
+      if (tons <= 0) return "🚛 Транспорт: уточняется";
+      if (tons <= 1.5) return "🚐 До 1.5 тн: Газель (открытый борт) / Догруз";
+      if (tons <= 5) return "🚚 До 5 тн: Валдай / 5-тонник (или Догруз)";
+      if (tons <= 10) return "🚛 До 10 тн: Камаз-одиночка / 10-тонник";
+      if (tons <= 21.5) return "🚛 10–21.5 тн: Еврофура 20т (открытый верх/бок)";
+      const trucks = Math.ceil(tons / 20);
+      return `🚛 Свыше 21.5 тн: ~${trucks} еврофуры по 20т`;
+    }
+
+    function addToCart() {
+      const tn = Math.max(0, parseFloat(document.getElementById("tonsInput").value) || 0);
+      if (tn <= 0) return alert("⚠️ Введите тоннаж (больше нуля)!");
+
+      if (isCreatingNew) {
+        const d = document.getElementById("newDiam").value;
+        const w = document.getElementById("newWall").value;
+        const c = document.getElementById("newCat").value;
+        const cond = document.getElementById("newCond").value;
+        const g = document.getElementById("newGost").value;
+        const buyPr = parseFloat(document.getElementById("newBuyPrice").value) || 0;
+        const sellPr = parseFloat(document.getElementById("newSellPrice").value) || 0;
+
+        if (!d || !w) return alert("⚠️ Укажите диаметр и стенку!");
+
+        cart.push({
+          isNew: true,
+          name: `Труба ${d}х${w}`,
+          diam: parseFloat(d),
+          wall: parseFloat(w),
+          category: c,
+          condition: cond,
+          gost: g,
+          buyPriceTn: buyPr,
+          priceTn: sellPr,
+          dealPriceTn: sellPr,
+          tons: tn,
+          meters: 0,
+          cost: Math.round((buyPr > 0 ? buyPr : sellPr) * tn),
+          margin: 0
+        });
+        toggleNewForm(false);
+      } else if (currentMode === 'restore') {
+        if (selectedIdx === null) return alert("⚠️ Выберите трубу Б/у для отправки в восстановление!");
+        const p = inventory[selectedIdx];
+        const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
+        if (m > p.stockM) {
+          if (!confirm(`⚠️ На складе всего ${p.stockM} м Б/у. Отправить в цех ${m} м?`)) return;
+        }
+        const baseBuy = parseFloat(document.getElementById("restBaseBuy").value) || 0;
+        const srvCost = parseFloat(document.getElementById("restServiceCost").value) || 0;
+        const tSell   = parseFloat(document.getElementById("restTargetSell").value) || 0;
+        const tCat    = document.getElementById("restTargetCat").value;
+        const tGost   = document.getElementById("restTargetGost").value;
+        const tNotes  = document.getElementById("restTargetNotes").value;
+
+        cart.push({
+          isRestore: true,
+          rowIndex: p.rowIndex,
+          name: p.name,
+          diam: p.diam,
+          wall: p.wall,
+          category: tCat,
+          condition: 'Б/у ➔ Восст.',
+          gost: tGost,
+          meters: m,
+          tons: tn,
+          baseBuyPriceTn: baseBuy,
+          serviceCostTn: srvCost,
+          targetCategory: tCat,
+          targetGost: tGost,
+          targetSellPriceTn: tSell,
+          targetNotes: tNotes,
+          dealPriceTn: baseBuy + srvCost,
+          cost: Math.round((baseBuy + srvCost) * tn),
+          margin: Math.round((tSell - (baseBuy + srvCost)) * tn)
+        });
+      } else {
+        if (selectedIdx === null) return alert("⚠️ Выберите трубу!");
+        const p = inventory[selectedIdx];
+        const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
+        const inputPr = parseFloat(document.getElementById("dealPriceInput").value) || 0;
+        const dealPriceTn = currentMode === 'deduct' ? (inputPr || p.priceTn) : (inputPr || p.buyPriceTn || p.priceTn);
+        const buyPriceTn = currentMode === 'add' ? (inputPr || p.buyPriceTn) : p.buyPriceTn;
+
+        if (currentMode === 'deduct' && buyPriceTn > 0 && (dealPriceTn - buyPriceTn) < (p.minMarginPerTon || 3000)) {
+          return alert(`⛔ СТОП-ЛОСС! Цена (${dealPriceTn} ₽) дает маржу ниже ${p.minMarginPerTon || 3000} ₽/тн!`);
+        }
+
+        if (currentMode === 'deduct' && m > p.stockM) {
+          if (!confirm(`⚠️ На складе всего ${p.stockM} м. Запрошено ${m} м. Списать в минус?`)) return;
+        }
+
+        const itemCost = Math.round(dealPriceTn * tn);
+        const itemMargin = (currentMode === 'deduct' && buyPriceTn > 0)
+          ? Math.round((dealPriceTn - buyPriceTn) * tn)
+          : 0;
+
+        cart.push({
+          isNew: false,
+          rowIndex: p.rowIndex,
+          name: p.name,
+          diam: p.diam,
+          wall: p.wall,
+          category: p.category,
+          condition: p.condition,
+          gost: p.gost,
+          meters: m,
+          tons: tn,
+          dealPriceTn: dealPriceTn,
+          buyPriceTn: buyPriceTn,
+          cost: itemCost,
+          margin: itemMargin
+        });
+      }
+
+      document.getElementById("metersInput").value = "";
+      document.getElementById("tonsInput").value = "";
+      renderCart();
+    }
+
+    function removeFromCart(idx) {
+      cart.splice(idx, 1);
+      renderCart();
+    }
+
+    function clearCart() {
+      cart = [];
+      renderCart();
+    }
+
+    function renderCart() {
+      const box = document.getElementById("cartBox");
+      const container = document.getElementById("cartItems");
+      const countEl = document.getElementById("cartCount");
+
+      if (cart.length === 0) {
+        box.style.display = "none";
+        container.innerHTML = "";
+        return;
+      }
+
+      box.style.display = "block";
+      countEl.innerText = cart.length;
+      container.innerHTML = "";
+
+      let totalTn = 0;
+      let totalSum = 0;
+      let totalMarg = 0;
+
+      cart.forEach((item, idx) => {
+        totalTn += item.tons;
+        totalSum += item.cost;
+        totalMarg += (item.margin || 0);
+
+        const div = document.createElement("div");
+        div.className = "cart-item";
+        const metersText = item.meters > 0 ? `${item.meters.toFixed(1)} м | ` : '';
+        const marginBadge = (currentMode === 'deduct' && item.margin > 0)
+          ? ` <span style="color:#166534; font-weight:700;">(Маржа: +${item.margin.toLocaleString('ru-RU')} ₽)</span>`
+          : '';
+
+        div.innerHTML = `
+          <span class="del-btn" onclick="removeFromCart(${idx})">✕</span>
+          <div style="font-weight:800; color:#0f172a; margin-bottom:2px;">
+            ${item.name} <span style="font-weight:600; color:#64748b;">(${item.condition || item.category})</span>
+          </div>
+          <div style="color:#475569;">
+            ${metersText}<strong>${item.tons.toFixed(3)} тн</strong> × ${(item.dealPriceTn || 0).toLocaleString('ru-RU')} ₽ = <strong>${item.cost.toLocaleString('ru-RU')} ₽</strong>${marginBadge}
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById("totalTons").innerText = `${totalTn.toFixed(3)} тн`;
+      document.getElementById("totalCost").innerText = `${totalSum.toLocaleString('ru-RU')} ₽`;
+
+      const marginRow = document.getElementById("sumMarginRow");
+      if (currentMode === 'deduct' && totalMarg > 0) {
+        marginRow.style.display = "flex";
+        document.getElementById("totalMargin").innerText = `+${totalMarg.toLocaleString('ru-RU')} ₽`;
+      } else {
+        marginRow.style.display = "none";
+      }
+
+      document.getElementById("truckBadge").innerText = getTruckRecommendation(totalTn);
+    }
+
+    function copyOffer() {
+      if (cart.length === 0) return;
+      let totalTn = 0;
+      let totalSum = 0;
+      let lines = ["📋 *КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ (ООО «Капитал-Плюс»)*", "📍 Склад отгрузки: г. Воронеж", ""];
+
+      cart.forEach((item, i) => {
+        totalTn += item.tons;
+        totalSum += item.cost;
+        const mStr = item.meters > 0 ? `${item.meters.toFixed(1)} м / ` : '';
+        const gostStr = (item.gost && item.gost !== '—') ? `, ${item.gost}` : '';
+        lines.push(
+          `${i + 1}. *${item.name}* (${item.category}, ${item.condition}${gostStr})\n` +
+          `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${item.dealPriceTn.toLocaleString('ru-RU')} ₽/тн = *${item.cost.toLocaleString('ru-RU')} ₽*`
+        );
+      });
+
+      lines.push("");
+      lines.push(`⚖️ *Общий вес:* ${totalTn.toFixed(3)} тн`);
+      lines.push(`💰 *Итого сумма:* ${totalSum.toLocaleString('ru-RU')} ₽`);
+      lines.push(`${getTruckRecommendation(totalTn)}`);
+
+      const text = lines.join("\n");
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+
+      const btn = document.getElementById("btnCopyOffer");
+      const oldText = btn.innerText;
+      btn.innerText = "✅ Скопировано в буфер!";
+      setTimeout(() => { btn.innerText = oldText; }, 2000);
+    }
+
+    function executeOperation() {
+      if (cart.length === 0) return;
+      const btn = document.getElementById("executeBtn");
+      const oldText = btn.innerText;
+      btn.disabled = true;
+      btn.innerText = "⏳ Выполняется...";
+
+      const onSuccess = function(msg) {
+        btn.disabled = false;
+        btn.innerText = oldText;
+        clearCart();
+        loadInventory();
+        if (msg) alert(msg);
+      };
+
+      const onFailure = function(err) {
+        btn.disabled = false;
+        btn.innerText = oldText;
+        alert("❌ Ошибка выполнения: " + err.message);
+      };
+
+      if (currentMode === 'deduct') {
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).executeBatchDeduction(cart);
+      } else if (currentMode === 'add') {
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).executeBatchAddition(cart);
+      } else if (currentMode === 'restore') {
+        google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).executeBatchRestore(cart);
+      }
+    }
+  </script>
+</body>
+</html>
