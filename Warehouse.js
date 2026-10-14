@@ -256,6 +256,7 @@ function executeBatchAddition(cartItems) {
         const weightedBuy = (currentTn > 0 && oldBuyTn > 0)
           ? Math.round(((oldBuyTn * currentTn) + (incomingBuyTn * addTn)) / (currentTn + addTn))
           : Math.round(incomingBuyTn);
+        sheet.getRange(row, 7).clearDataValidations();
         sheet.getRange(row, 7).setValue(weightedBuy); // G: Закупка
       }
 
@@ -369,6 +370,7 @@ function executeBatchRestoration(cartItems) {
         const weightedBuy = (oldTn > 0 && oldBuyTn > 0)
           ? Math.round(((oldBuyTn * oldTn) + (restoredBuyTn * moveTn)) / (oldTn + moveTn))
           : restoredBuyTn;
+        sheet.getRange(targetRow, 7).clearDataValidations();
         sheet.getRange(targetRow, 7).setValue(weightedBuy);
       }
 
@@ -417,6 +419,13 @@ function executeBatchRestoration(cartItems) {
 }
 
 /**
+ * Связка названия функции для вызова из Calculator.html
+ */
+function executeBatchRestore(cartItems) {
+  return executeBatchRestoration(cartItems);
+}
+
+/**
  * Копирование форматов и чип-списков из строки 3 (без навязывания списков в колонку G)
  */
 function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
@@ -437,7 +446,8 @@ function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
     );
   });
 
-  sheet.getRange(row, 7).clearDataValidation();
+  // ИСПРАВЛЕНО: добавлена буква s на конце (.clearDataValidations)
+  sheet.getRange(row, 7).clearDataValidations();
 
   sheet.getRange(row, 4, 1, 3).setHorizontalAlignment("center");
   sheet.getRange(row, 10, 1, 3).setHorizontalAlignment("center");

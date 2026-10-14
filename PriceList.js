@@ -3,14 +3,6 @@
  * Файл: PriceList.gs — Генератор прайс-листа реального наличия труб и отправка КП
  */
 
-function safeParseFloat(val) {
-  if (val === null || val === undefined || val === '') return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
-  const cleaned = val.toString().replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-  const parsed = parseFloat(cleaned);
-  return isNaN(parsed) ? 0 : parsed;
-}
-
 function openPriceListModal() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const activeSheet = ss.getActiveSheet();

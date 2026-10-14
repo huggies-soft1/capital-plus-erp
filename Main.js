@@ -13,6 +13,17 @@ function onOpen() {
     .addSeparator()
     .addItem('➕ Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
     .addToUi();
+
+  // Автоматическая подсветка дублей ИНН на активном листе при открытии таблицы
+  try {
+    const activeSheet = SpreadsheetApp.getActiveSheet();
+    if (activeSheet && typeof highlightDuplicateInnsOnSheet_ === 'function') {
+      const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания", "4.Архив лидов"];
+      if (crmSheets.includes(activeSheet.getName().trim())) {
+        highlightDuplicateInnsOnSheet_(activeSheet);
+      }
+    }
+  } catch (e) {}
 }
 
 // =================================================================
@@ -78,7 +89,6 @@ function getSheetByNameSafe(ss, targetName) {
 
 function onEdit(e) {
   if (!e || !e.range) return;
-  if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) return;
 
   const sheet = e.range.getSheet();
   const sheetName = sheet.getName().trim();
@@ -91,10 +101,18 @@ function onEdit(e) {
   ];
 
   if (crmSheets.includes(sheetName)) {
+    // Даже если вставили сразу пачку строк (Ctrl+V), автоматически подсвечиваем дубли ИНН
+    if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
+      if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
+        highlightDuplicateInnsOnSheet_(sheet);
+      }
+      return;
+    }
     if (typeof handleCallingSheetEdit === 'function') {
       handleCallingSheetEdit(e, sheet);
     }
   } else if (sheetName === "Склад") {
+    if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) return;
     if (typeof handleWarehouseSheetEdit === 'function') {
       handleWarehouseSheetEdit(e, sheet);
     }
@@ -113,12 +131,11 @@ function sortWarehouseData() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 3) return;
 
-  // 15 колонок (A:O) со строки 3 до конца
   const range = sheet.getRange(3, 1, lastRow - 2, 15);
 
   range.sort([
-    {column: 4, ascending: true}, // 1. Диаметр (Ø мм)
-    {column: 5, ascending: true}  // 2. Стенка (мм)
+    {column: 4, ascending: true},
+    {column: 5, ascending: true}
   ]);
 
   ss.toast('Трубы выстроены строго по возрастанию диаметра!', '✅ Склад отсортирован', 4);
