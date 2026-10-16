@@ -229,8 +229,8 @@ function getSenderSignature() {
   // 2. Ваша точная фирменная подпись со всеми контактами
   const fallbackHtml = `
     <div style="margin-top: 24px; padding-top: 16px; border-top: 2px solid #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; color: #334155; line-height: 1.5;">
-      <div style="font-weight: 800; font-size: 16px; color: #0f172a; letter-spacing: -0.3px;">Кирилл Манюхин</div>
-      <div style="color: #64748b; font-size: 12px; margin-bottom: 8px;">Менеджер по продажам и развитию в маркетинге</div>
+      <div style="font-weight: 800; font-size: 16px; color: #0f172a; letter-spacing: -0.3px;">ООО Капитал-Плюс</div>
+      <div style="color: #64748b; font-size: 12px; margin-bottom: 8px;">Отдел продаж и развития</div>
       
       <div style="font-size: 12px; color: #1e293b; margin-bottom: 4px;">
         <strong>Моб / TG / WA:</strong> <a href="tel:+79065883777" style="color: #2563eb; text-decoration: none; font-weight: 600;">+7 (906) 588-37-77</a> &nbsp;|&nbsp; 
@@ -242,7 +242,7 @@ function getSenderSignature() {
       </div>
       
       <div style="font-size: 11px; color: #64748b; line-height: 1.4; margin-bottom: 8px;">
-        ООО «Капитал-Плюс» | ИНН 3663070544 | ОГРН 1083668004914 | НДС 20% | г. Воронеж, ул. Волгоградская, д. 48, оф. 76
+        ООО «Капитал-Плюс» | ИНН 3663070544 | ОГРН 1083668004914 | НДС 22% | г. Воронеж, ул. Волгоградская, д. 48, оф. 76
       </div>
 
       <div style="font-size: 10px; color: #94a3b8; line-height: 1.3; font-style: italic;">
