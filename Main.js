@@ -1,5 +1,5 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.1)
  * Файл: Main.gs — Главное меню, глобальные утилиты и маршрутизатор триггеров
  */
 
@@ -9,6 +9,9 @@ function onOpen() {
     .addItem('⚡ Открыть калькулятор отгрузки', 'openCalculatorSidebar')
     .addItem('📄 Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
     .addSeparator()
+    .addItem('🎯 Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
+    .addItem('🗂️ Упаковать примечания (K) в карточки Досье (B)', 'packAllNotesIntoDossierOnActiveSheet')
+    .addItem('🔍 Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
     .addItem('🧹 Отсортировать склад по диаметрам', 'sortWarehouseData')
     .addSeparator()
     .addItem('➕ Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
