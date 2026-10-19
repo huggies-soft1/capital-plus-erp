@@ -1,8 +1,8 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.1)
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.4)
  * Файл: Calling.gs — Маршрутизация лидов, скоростной парсер труб (53010 / 530*10 / 630 8),
- * Авто-Досье клиента (перенос «отсебятины» из K в Заметку карточки B с выжимкой сути),
- * самоочистка зависших потребностей (H -> в Историю N со сбросом в «Нет») и живой мозг колонки O.
+ * 100% АВТОМАТИЧЕСКОЕ Досье (K -> Заметка B), мгновенный сброс подсветок на пустых ячейках,
+ * авто-архивация H+I+J в Историю (N), ветка «Проход секретаря (Выбить ЛПР)» в Обзвоне и живой мозг колонки O.
  */
 
 const STANDARD_PIPE_DIAMS_ = [
@@ -16,19 +16,29 @@ function handleCallingSheetEdit(e, sheet) {
   const col = e.range.columnStart;
   const sheetName = sheet.getName().trim();
 
-  // Игнорируем заголовки (строка 1)
   if (row < 2) return;
 
+  if (cleanupRowIfCompletelyEmpty_(sheet, row, sheetName)) {
+    if (col === 1) highlightDuplicateInnsOnSheet_(sheet, row);
+    return;
+  }
+
   // =================================================================
-  // 0. КОНТРОЛЬ И ПОДСВЕТКА ДУБЛЕЙ ИНН (Колонка A / 1)
+  // 0. КОНТРОЛЬ И СБРОС ПОДСВЕТКИ ДУБЛЕЙ ИНН (Колонка A / 1)
   // =================================================================
   if (col === 1) {
-    const rawInn = e.value !== undefined ? String(e.value) : String(sheet.getRange(row, 1).getValue());
+    const cell = sheet.getRange(row, 1);
+    const rawInn = e.value !== undefined ? String(e.value) : String(cell.getValue());
     const cleanInn = rawInn.replace(/\D/g, '');
-    if (cleanInn && cleanInn !== rawInn.trim()) {
-      sheet.getRange(row, 1).setNumberFormat('@').setValue(cleanInn);
+    if (!cleanInn) {
+      cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+      highlightDuplicateInnsOnSheet_(sheet, row);
+      return;
     }
-    highlightDuplicateInnsOnSheet_(sheet);
+    if (cleanInn !== rawInn.trim()) {
+      cell.setNumberFormat('@').setValue(cleanInn);
+    }
+    highlightDuplicateInnsOnSheet_(sheet, row);
     if (cleanInn.length >= 10) {
       checkInnAcrossAllSheets_(sheet.getParent(), sheetName, row, cleanInn);
     }
@@ -68,18 +78,41 @@ function handleCallingSheetEdit(e, sheet) {
   }
 
   // =================================================================
-  // 2.5 СКОРОСТНОЙ ВВОД ПОТРЕБНОСТИ ТРУБЫ (Колонка H / 8: 53010 -> 530х10, 630 8 -> 630х8)
+  // 2.5 ЖИВАЯ ПОТРЕБНОСТЬ ТРУБЫ (Колонка H / 8)
   // =================================================================
   if (col === 8) {
     const cell = sheet.getRange(row, col);
-    const rawNeed = e.value !== undefined ? String(e.value) : String(cell.getValue());
-    if (rawNeed) {
-      const formattedNeed = formatPipeNeed_(rawNeed);
-      if (formattedNeed && formattedNeed !== rawNeed.trim()) {
-        cell.setNumberFormat('@');
-        cell.setValue(formattedNeed);
-      }
+    const rawNeed = e.value !== undefined ? String(e.value).trim() : String(cell.getValue() || '').trim();
+    const oldNeed = e.oldValue !== undefined ? String(e.oldValue).trim() : '';
+    const formattedNeed = rawNeed ? formatPipeNeed_(rawNeed) : '';
+
+    if (formattedNeed && formattedNeed !== rawNeed) {
+      cell.setNumberFormat('@').setValue(formattedNeed);
     }
+
+    const isNowEmptyOrNo = !formattedNeed || formattedNeed.toLowerCase() === 'нет' || formattedNeed === '—';
+    const wasActiveNeed  = oldNeed !== '' && oldNeed.toLowerCase() !== 'нет' && oldNeed !== '—' && oldNeed !== '-';
+
+    if (isNowEmptyOrNo && wasActiveNeed) {
+      const ss = sheet.getParent();
+      const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
+      const nowStr = Utilities.formatDate(new Date(), timeZone, "dd.MM.yyyy HH:mm");
+      const curType = String(sheet.getRange(row, 9).getValue() || '').trim();
+      const curApp  = String(sheet.getRange(row, 10).getValue() || '').trim();
+      const curHist = String(sheet.getRange(row, 14).getValue() || '').trim();
+      const snap    = buildNeedSnapshot_(formatPipeNeed_(oldNeed), curType, curApp);
+
+      if (snap) {
+        const logLine = `[📋 Снята/закрыта потребность${snap} - ${nowStr}]`;
+        sheet.getRange(row, 14).setValue(prependHistoryLog_(curHist, logLine));
+      }
+      sheet.getRange(row, 9, 1, 2).clearContent();
+      sheet.setActiveSelection(cell);
+      ss.toast(`Прежняя заявка (${oldNeed}) сохранена в Историю (N), колонки I и J очищены!`, "📋 Сохранено в Историю", 4);
+    }
+
+    updateSingleRowNeedHighlight_(sheet, row, formattedNeed);
+
     if (sheetName === "3. Лист ожидания") {
       refreshSingleRowTactic_(sheet, row);
     }
@@ -87,17 +120,24 @@ function handleCallingSheetEdit(e, sheet) {
   }
 
   // =================================================================
-  // 2.8 АВТО-ДОСЬЕ КЛИЕНТА ПРИ ВВОДЕ «ОТСЕБЯТИНЫ» В ПРИМЕЧАНИЕ (Колонка K / 11)
+  // 2.8 МГНОВЕННОЕ АВТО-ДОСЬЕ КЛИЕНТА ПРИ ВВОДЕ В ПРИМЕЧАНИЕ (Колонка K / 11)
   // =================================================================
   if (col === 11) {
-    processRawNoteIntoDossier_(sheet, row);
+    processRawNoteIntoDossier_(sheet, row, e.oldValue);
     if (sheetName === "3. Лист ожидания") {
       refreshSingleRowTactic_(sheet, row);
     }
     return;
   }
 
-  // При изменении Сферы (G), Типа трубы (I), Назначения (J) или Истории (N) на Листе ожидания — мгновенно обновляем тактику в колонке O
+  if (col === 12) {
+    const dlVal = e.value !== undefined ? String(e.value).trim() : String(sheet.getRange(row, 12).getValue() || '').trim();
+    if (!dlVal) {
+      sheet.getRange(row, 12).setBackground(null);
+    }
+    return;
+  }
+
   if (sheetName === "3. Лист ожидания" && (col === 7 || col === 9 || col === 10 || col === 14)) {
     refreshSingleRowTactic_(sheet, row);
     return;
@@ -117,10 +157,8 @@ function handleCallingSheetEdit(e, sheet) {
   const now = new Date();
   const nowStr = Utilities.formatDate(now, timeZone, "dd.MM.yyyy HH:mm");
 
-  // Сначала упаковываем свежую отсебятину из K в Досье (если она там есть)
   processRawNoteIntoDossier_(sheet, row);
 
-  // Считываем все 14 базовых колонок (A..N) + полное Досье из заметки на ячейке компании (B)
   const rowData     = sheet.getRange(row, 1, 1, 14).getValues()[0];
   const companyNote = String(sheet.getRange(row, 2).getNote() || '').trim();
 
@@ -130,15 +168,14 @@ function handleCallingSheetEdit(e, sheet) {
   const lpr         = String(rowData[3] || '').trim();
   const phone       = formatRussianPhones_(String(rowData[4] || '').trim());
   const email       = String(rowData[5] || '').trim();
-  const sphere      = String(rowData[6] || '').trim(); // G(7): Сфера (постоянный профиль по ОКВЭД)
-  const need        = formatPipeNeed_(String(rowData[7] || '').trim()); // H(8): Живая потребность сейчас
-  const pipeType    = String(rowData[8] || '').trim(); // I(9): Тип трубы сейчас
-  const application = String(rowData[9] || '').trim(); // J(10): Под что берут сейчас
-  let notes         = String(rowData[10] || '').trim(); // K(11): Краткая выжимка примечания
-  let deadline      = rowData[11];                      // L(12): Дедлайн
-  let history       = String(rowData[13] || '').trim(); // N(14): История (системные логи + архив всех прошлых заявок)
+  const sphere      = String(rowData[6] || '').trim();
+  const need        = formatPipeNeed_(String(rowData[7] || '').trim());
+  const pipeType    = String(rowData[8] || '').trim();
+  const application = String(rowData[9] || '').trim();
+  let notes         = String(rowData[10] || '').trim();
+  let deadline      = rowData[11];
+  let history       = String(rowData[13] || '').trim();
 
-  // Формируем слепок текущей живой заявки (H + I + J) для автоматической фиксации в Истории (N)
   const needSnapshot = buildNeedSnapshot_(need, pipeType, application);
 
   let formattedDeadline = "";
@@ -152,18 +189,35 @@ function handleCallingSheetEdit(e, sheet) {
   if (decision.includes("кит") || decision.includes("золот")) {
     sheet.getRange(row, 13).clearContent();
     ss.toast(
-      "В «Киты» клиент попадает ТОЛЬКО автоматически после оплаты заказа! Выберите «Выставлен счет» или «В Ожидание».",
+      "В «Киты» клиент попадает ТОЛЬКО автоматически после оплаты заказа! Выберите «В Ожидание» или «Горящая заявка».",
       "⛔ Правило №6 (Закрытый клуб)",
       6
     );
     return;
   }
 
-  // === ВЕТКА 1: ВЫСТАВЛЕН СЧЕТ ===
-  if (decision.includes("выставлен счет") || decision.includes("счет") || decision.includes("счёт") || decision.includes("заказ")) {
-    const tag = `[💰 Выставлен счет${needSnapshot} - ${nowStr}]`;
-    const updatedHistory = prependHistoryLog_(history, tag);
+  // === ВЕТКА 0.5: 🛡️ ПРОХОД СЕКРЕТАРЯ (ВЫБИТЬ ЛПР) — Остается в «1. Обзвон (База)» на +2 рабочих дня без сжигания счетчика недозвонов! ===
+  if (decision.includes("секретар") || decision.includes("выбить") || decision.includes("лпр")) {
+    const nextTryStr = getNextWorkingDateStr_(now, 2, timeZone);
+    const secTag = `[🛡️ Проход секретаря — выбить ЛПР${needSnapshot} - ${nowStr}]`;
+    const updatedHistory = prependHistoryLog_(history, secTag);
+
+    sheet.getRange(row, 14).setValue(updatedHistory);
+    sheet.getRange(row, 12).setValue(nextTryStr);
+    sheet.getRange(row, 13).clearContent();
+    if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+
+    moveRowToBottom_(sheet, row);
+    ss.toast(`«${company || inn}» оставлен в базе на пробив секретаря (контроль: ${nextTryStr}). Строка опущена вниз!`, "🛡️ Выбить ЛПР", 4);
+    return;
+  }
+
+  // === ВЕТКА 1А: 🔥 ГОРЯЩАЯ ЗАЯВКА (В ПРОСЧЕТ) — Из «1. Обзвон (База)» в «3. Лист ожидания» С СОХРАНЕНИЕМ H, I, J! ===
+  if (decision.includes("горящ") || decision.includes("просчет") || decision.includes("просчёт") || decision.includes("заявк")) {
     const nextCheckDate = getNextWorkingDateStr_(now, 1, timeZone);
+    const hotTag = `[🔥 Горящая заявка${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
+    const updatedHistory = prependHistoryLog_(history, hotTag);
+    const liveNeed = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : "В просчете";
 
     if (sheetName === "1. Обзвон (База)") {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
@@ -171,23 +225,52 @@ function handleCallingSheetEdit(e, sheet) {
 
       const mergeRes = insertOrMergeRowByInn_(targetSheet, [
         inn, company, city, lpr, phone, email,
-        sphere, need || "В просчете", pipeType, application,
+        sphere, liveNeed, pipeType, application,
         notes, nextCheckDate, "", updatedHistory
       ], companyNote);
+      updateSingleRowNeedHighlight_(targetSheet, mergeRes.row, liveNeed);
       refreshSingleRowTactic_(targetSheet, mergeRes.row);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
-      const actionWord = mergeRes.merged ? "объединен с карточкой" : "перенесен";
-      ss.toast(`«${company || inn}» -> Счет зафиксирован! ${actionWord} в Ожидание (контроль: ${nextCheckDate}).`, "💰 Выставлен счет", 5);
+      ss.toast(`🔥 «${company || inn}» перенесен в Ожидание с ГОРЯЩЕЙ заявкой (${liveNeed})! Дедлайн: ${nextCheckDate}.`, "🔥 Горящая заявка", 5);
     } else {
-      sheet.getRange(row, 8).setValue(need);
+      sheet.getRange(row, 8).setValue(liveNeed);
       sheet.getRange(row, 14).setValue(updatedHistory);
       sheet.getRange(row, 12).setValue(nextCheckDate);
       sheet.getRange(row, 13).clearContent();
+      updateSingleRowNeedHighlight_(sheet, row, liveNeed);
       if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`«${company || inn}» -> Счет зафиксирован! Тактика переключена на дожим счета (${nextCheckDate}).`, "💰 Выставлен счет", 4);
+      ss.toast(`🔥 Заявка (${liveNeed}) взята в просчет! Контроль: ${nextCheckDate}.`, "🔥 В просчете", 4);
     }
+    return;
+  }
+
+  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ (Работает в «3. Лист ожидания» и «2. Золотой список (Киты)») ===
+  if (decision.includes("выставлен счет") || decision.includes("счет") || decision.includes("счёт") || decision.includes("заказ")) {
+    if (sheetName === "1. Обзвон (База)") {
+      sheet.getRange(row, 13).clearContent();
+      ss.toast(
+        "В холодном «Обзвоне» выберите «Горящая заявка (В просчет)» или «В Ожидание (Нет потребности)»!",
+        "💡 Маршрутизация Обзвона",
+        5
+      );
+      return;
+    }
+
+    const tag = `[💰 Выставлен счет${needSnapshot} - ${nowStr}]`;
+    const updatedHistory = prependHistoryLog_(history, tag);
+    const nextCheckDate = getNextWorkingDateStr_(now, 1, timeZone);
+    const liveNeed = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : "По счету";
+
+    sheet.getRange(row, 8).setValue(liveNeed);
+    sheet.getRange(row, 14).setValue(updatedHistory);
+    sheet.getRange(row, 12).setValue(nextCheckDate);
+    sheet.getRange(row, 13).clearContent();
+    updateSingleRowNeedHighlight_(sheet, row, liveNeed);
+    if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+    moveRowToBottom_(sheet, row);
+    ss.toast(`«${company || inn}» -> Счет зафиксирован в Истории! Тактика переключена на дожим счета (${nextCheckDate}).`, "💰 Выставлен счет", 4);
     return;
   }
 
@@ -205,9 +288,10 @@ function handleCallingSheetEdit(e, sheet) {
 
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
       inn, company, city, lpr, phone, email,
-      sphere, toWaiting ? "Нет" : need, "", "",
+      sphere, toWaiting ? "Нет" : "", "", "",
       notes, nextDate, "", updatedHistory
     ], companyNote);
+    updateSingleRowNeedHighlight_(targetSheet, mergeRes.row, toWaiting ? "Нет" : "");
     if (toWaiting) refreshSingleRowTactic_(targetSheet, mergeRes.row);
     sheet.deleteRow(row);
     ss.toast(`«${company || inn}» восстановлен в «${targetName}» со всей историей и Досье!`, "♻️ Возврат лида", 4);
@@ -227,6 +311,7 @@ function handleCallingSheetEdit(e, sheet) {
     sheet.getRange(row, 14).setValue(updatedHistory);
     sheet.getRange(row, 12).setValue(todayStr);
     sheet.getRange(row, 13).clearContent();
+    updateSingleRowNeedHighlight_(sheet, row, need);
     if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
 
     moveRowToBottom_(sheet, row);
@@ -234,7 +319,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ (Самоочистка зависшей потребности H -> «Нет» + смена шага тактики O!) ===
+  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
   if (decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер") || decision.includes("сезон")) {
     const shiftDateStr = getNextWorkingDateStr_(now, 30, timeZone);
     const finalDeadline = (formattedDeadline && formattedDeadline > getNextWorkingDateStr_(now, 2, timeZone))
@@ -245,14 +330,14 @@ function handleCallingSheetEdit(e, sheet) {
     const updatedHistory = prependHistoryLog_(history, tag);
 
     if (sheetName === "3. Лист ожидания") {
-      sheet.getRange(row, 8).setValue("Нет");
+      sheet.getRange(row, 8).setValue("Нет").setBackground(null);
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
       sheet.getRange(row, 12).setValue(finalDeadline);
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос перенесен в Историю, H сброшена в «Нет», тактика в O переключена на следующий шаг! Дедлайн: ${finalDeadline}.`, "🔄 Сдвиг спроса", 5);
+      ss.toast(`Запрос H+I+J сохранен в Историю (N), H сброшена в «Нет» (подсветка снята), тактика в O обновлена!`, "🔄 Сдвиг спроса", 5);
     } else {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
       if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
@@ -261,6 +346,7 @@ function handleCallingSheetEdit(e, sheet) {
         sphere, "Нет", "", "",
         notes, finalDeadline, "", updatedHistory
       ], companyNote);
+      targetSheet.getRange(mergeRes.row, 8).setBackground(null);
       refreshSingleRowTactic_(targetSheet, mergeRes.row);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
@@ -269,43 +355,46 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 3В: ЛИСТ ОЖИДАНИЯ -> Перенос из Обзвона/Китов в «3. Лист ожидания» ===
-  if (decision.includes("ожидан") || decision.includes("подума") || decision.includes("спящ")) {
+  // === ВЕТКА 3В: В ОЖИДАНИЕ (НЕТ ПОТРЕБНОСТИ / РАЗВЕДКА ПРОФИЛЯ) ===
+  if (decision.includes("ожидан") || decision.includes("подума") || decision.includes("спящ") || decision.includes("нет потребн")) {
     const defaultWaitDeadline = getNextWorkingDateStr_(now, 14, timeZone);
     const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
     const targetDeadline = (formattedDeadline && formattedDeadline >= todayStr) ? formattedDeadline : defaultWaitDeadline;
 
-    const tag = `[⏳ В Ожидание${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
+    const reconSnap = buildNeedSnapshot_(need, pipeType, application, "Берут в работу");
+    const tag = `[⏳ В Ожидание${reconSnap} (из «${sheetName}») - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
-    const activeNeedForWait = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : "Нет";
 
     if (sheetName === "3. Лист ожидания") {
-      sheet.getRange(row, 8).setValue(activeNeedForWait);
+      sheet.getRange(row, 8).setValue("Нет").setBackground(null);
+      sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
       sheet.getRange(row, 12).setValue(targetDeadline);
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос зафиксирован в Истории, тактика обновлена (дедлайн: ${targetDeadline})`, "⏳ Ожидание", 3);
+      ss.toast(`Профиль H+I+J записан в Историю (N), H сброшена в «Нет», дедлайн: ${targetDeadline}`, "⏳ Ожидание", 4);
       return;
     }
+
     const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
     if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
 
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
       inn, company, city, lpr, phone, email,
-      sphere, activeNeedForWait, pipeType, application,
+      sphere, "Нет", "", "",
       notes, targetDeadline, "", updatedHistory
     ], companyNote);
+    targetSheet.getRange(mergeRes.row, 8).setBackground(null);
     refreshSingleRowTactic_(targetSheet, mergeRes.row);
     sheet.deleteRow(row);
     highlightDuplicateInnsOnSheet_(sheet);
-    const msgAction = mergeRes.merged ? "объединён с существующей карточкой" : "перенесён";
-    ss.toast(`«${company || inn}» ${msgAction} в Лист ожидания (вместе с Досье)! Дедлайн: ${targetDeadline}`, "⏳ Ожидание", 5);
+    const msgAction = mergeRes.merged ? "объединён с карточкой" : "перенесён";
+    ss.toast(`«${company || inn}» ${msgAction} в Ожидание! Разведка (H+I+J) сохранена в Историю (N), H = «Нет».`, "⏳ В Ожидание", 5);
     return;
   }
 
-  // === ВЕТКА 4: НЕДОЗВОН (Каскадный шаг ТЗ v6.1: 1 -> 3 -> 7 -> 14 дней и в Архив на 4/4) ===
+  // === ВЕТКА 4: НЕДОЗВОН (Каскадный шаг ТЗ v6.4: 1 -> 3 -> 7 дней и в Архив на 4/4) ===
   if (decision.includes("недозвон") || decision.includes("не дозвон") || decision.includes("сброс") || decision.includes("не берет")) {
     const match = history.match(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/i);
     let attempts = match ? parseInt(match[1], 10) : 0;
@@ -335,11 +424,12 @@ function handleCallingSheetEdit(e, sheet) {
       const archiveTag = `[📦 В Архив: 4 недозвона${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
       const finalArchiveHistory = prependHistoryLog_(updatedHistory, archiveTag);
 
-      insertOrMergeRowByInn_(targetSheet, [
+      const mergeRes = insertOrMergeRowByInn_(targetSheet, [
         inn, company, city, lpr, phone, email,
         sphere, "Нет", "", "",
         notes, "", "Недозвон 4/4", finalArchiveHistory
       ], companyNote);
+      targetSheet.getRange(mergeRes.row, 8).setBackground(null);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
       ss.toast(`«${company || inn}» перенесён в Архив (4/4 недозвона). Все данные и Досье сохранены!`, "📦 Архив", 4);
@@ -369,11 +459,12 @@ function handleCallingSheetEdit(e, sheet) {
     const archiveTag = `[${icon} В Архив: ${reasonText}${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
     const finalArchiveHistory = prependHistoryLog_(history, archiveTag);
 
-    insertOrMergeRowByInn_(targetSheet, [
+    const mergeRes = insertOrMergeRowByInn_(targetSheet, [
       inn, company, city, lpr, phone, email,
       sphere, "Нет", "", "",
       notes, "", reasonText, finalArchiveHistory
     ], companyNote);
+    targetSheet.getRange(mergeRes.row, 8).setBackground(null);
     sheet.deleteRow(row);
     highlightDuplicateInnsOnSheet_(sheet);
     ss.toast(`«${company || inn}» отправлен в Архив (${reasonText}). Все 14 колонок и Досье сохранены!`, `${icon} ${reasonText}`, 4);
@@ -382,64 +473,112 @@ function handleCallingSheetEdit(e, sheet) {
 }
 
 // =================================================================
-// ДВУХКОНТУРНОЕ ДОСЬЕ КЛИЕНТА (ОТСЕБЯТИНА В K -> ЗАМЕТКА B + ВЫЖИМКА)
+// СБРОС ПОДСВЕТОК ПРИ ПУСТЫХ ЯЧЕЙКАХ И ПАКЕТНОМ УДАЛЕНИИ (DELETE)
 // =================================================================
 
-/**
- * Переносит сырую «отсебятину» из колонки K (Примечание) во всплывающую Заметку-Досье
- * на ячейке Компании (колонка B), а в самой ячейке K оставляет краткую боевую выжимку!
- */
-function processRawNoteIntoDossier_(sheet, row) {
-  const noteCell = sheet.getRange(row, 11); // K: Примечание
-  const compCell = sheet.getRange(row, 2);  // B: Компания (здесь хранится всплывающее Досье)
+function updateSingleRowNeedHighlight_(sheet, row, needVal) {
+  const cell = sheet.getRange(row, 8);
+  const str = (needVal !== undefined ? String(needVal) : String(cell.getValue() || '')).trim();
+  const isAct = str !== '' && str.toLowerCase() !== 'нет' && str !== '—' && str !== '-';
+
+  if (!isAct) {
+    cell.setBackground(null);
+    return;
+  }
+
+  const stockByDiam = getAvailableStockDiamsMap_(sheet.getParent());
+  const liveDiams = Array.from(new Set((str.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
+  cell.setBackground(liveDiams.length > 0 ? '#dcfce7' : null);
+}
+
+function cleanupRowIfCompletelyEmpty_(sheet, row, sheetName) {
+  if (row < 2) return false;
+  const vals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+  const hasAnyData = vals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
+  if (hasAnyData) return false;
+
+  const maxCol = sheetName === "3. Лист ожидания" ? 15 : 14;
+  sheet.getRange(row, 1, 1, maxCol).setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+  sheet.getRange(row, 2).setNote('');
+  if (sheetName === "3. Лист ожидания") {
+    sheet.getRange(row, 15).clearContent();
+  }
+  return true;
+}
+
+function handleMultiCellCrmEdit_(e, sheet) {
+  const sheetName = sheet.getName().trim();
+  const startRow = Math.max(2, e.range.getRow());
+  const endRow = e.range.getLastRow();
+
+  for (let r = startRow; r <= endRow; r++) {
+    if (!cleanupRowIfCompletelyEmpty_(sheet, r, sheetName)) {
+      const hVal = String(sheet.getRange(r, 8).getValue() || '').trim();
+      updateSingleRowNeedHighlight_(sheet, r, hVal);
+      if (sheetName === "3. Лист ожидания") {
+        refreshSingleRowTactic_(sheet, r);
+      }
+    }
+  }
+
+  highlightDuplicateInnsOnSheet_(sheet, endRow);
+  syncUnpackedNotesOnSheetSilent_(sheet);
+}
+
+// =================================================================
+// 100% АВТОМАТИЧЕСКОЕ ДОСЬЕ КЛИЕНТА (ВВОД В K -> СРАЗУ В ЗАМЕТКУ B + ВЫЖИМКА В K)
+// =================================================================
+
+function processRawNoteIntoDossier_(sheet, row, oldVal) {
+  const noteCell = sheet.getRange(row, 11);
+  const compCell = sheet.getRange(row, 2);
   const rawText  = String(noteCell.getValue() || '').trim();
   if (!rawText) return;
 
-  // Если это уже аккуратная короткая выжимка с маркером 📌 — не дублируем повторно
   const existingDossier = String(compCell.getNote() || '').trim();
   const timeZone = sheet.getParent().getSpreadsheetTimeZone() || "Europe/Moscow";
   const dateStr  = Utilities.formatDate(new Date(), timeZone, "dd.MM.yyyy HH:mm");
 
-  // Записываем полный текст отсебятины в Заметку-Досье на ячейке Компании (если его там еще нет)
-  const cleanRawForCheck = rawText.replace(/^📌\s*/, '').trim();
-  if (cleanRawForCheck && !existingDossier.includes(cleanRawForCheck)) {
+  let cleanThought = rawText;
+  if (rawText.startsWith('📌')) {
+    const pipeIdx = rawText.indexOf('|');
+    cleanThought = pipeIdx !== -1 ? rawText.slice(pipeIdx + 1).trim() : rawText.replace(/^📌\s*/, '').trim();
+  }
+
+  let updatedDossier = existingDossier;
+  if (cleanThought && !existingDossier.includes(cleanThought)) {
     const header = existingDossier ? existingDossier + '\n────────────────────\n' : '🗂️ ДОСЬЕ КЛИЕНТА («КАПИТАЛ-ПЛЮС»):\n\n';
-    const updatedDossier = `${header}✍️ [${dateStr}]:\n${rawText}`;
+    updatedDossier = `${header}✍️ [${dateStr}]:\n${cleanThought}`;
     compCell.setNote(updatedDossier);
   }
 
-  // Строим краткую выжимку (самое важное) для самой ячейки K, если текст длинный (> 55 символов или многострочный)
-  const summary = extractSmartSummaryFromNote_(rawText);
-  if (summary && summary !== rawText && (rawText.length > 55 || rawText.includes('\n'))) {
+  const summary = extractSmartSummaryFromNote_(cleanThought || rawText, updatedDossier);
+  if (summary && summary !== rawText) {
     noteCell.setValue(summary);
   }
 }
 
-/**
- * Извлекает самую суть (ключевые теги + краткий тезис) из сырой «отсебятины» менеджера
- */
-function extractSmartSummaryFromNote_(rawText) {
-  const lower = rawText.toLowerCase();
+function extractSmartSummaryFromNote_(latestText, fullDossierText) {
+  const combinedSource = `${fullDossierText || ''} ${latestText || ''}`;
+  const lower = combinedSource.toLowerCase();
   const tags = [];
 
+  if (/весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(lower))   tags.push('⚖️ ВЕСЫ: +10% на допуск!');
   if (/тендер|торг|аукцион|закупк|44-фз|223-фз|аст|ртс/i.test(lower)) tags.push('🏛️ Тендеры');
   if (/аккредитац|реестр|сб\b|служб.*безопасн/i.test(lower))          tags.push('📑 Аккредитация');
-  if (/весы|взвеш|микрометр|толщиномер|допуск|хитро/i.test(lower))   tags.push('⚖️ Контроль весов/стенки');
   if (/отсрочк|постоплат|аванс|финансир|нет денег|бюджет/i.test(lower)) tags.push('💳 Финансы/Отсрочка');
   if (/прокол|гнб|футляр|гильз/i.test(lower))                        tags.push('🛠️ Прокол/Футляр');
   if (/обсад|скважин|бур/i.test(lower))                              tags.push('💧 Обсадка/Бурение');
   if (/сваи|свай|опор|мост/i.test(lower))                            tags.push('🏗️ Сваи/Опоры');
 
-  // Ищем упомянутые диаметры в тексте
-  const diams = Array.from(new Set((rawText.match(/\b\d{2,4}\b/g) || []).map(Number)))
+  const diams = Array.from(new Set((combinedSource.match(/\b\d{2,4}\b/g) || []).map(Number)))
     .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
   if (diams.length > 0) {
     tags.push(`Ø ${diams.slice(0, 5).join(',')}`);
   }
 
-  // Берем первую осмысленную фразу (до 45 символов)
-  const firstLine = rawText.replace(/\n+/g, ' ').replace(/^📌\s*/, '').trim();
-  const shortPhrase = firstLine.length > 48 ? firstLine.slice(0, 45).trim() + '…' : firstLine;
+  const cleanLine = String(latestText || '').replace(/\n+/g, ' ').replace(/^📌\s*/, '').trim();
+  const shortPhrase = cleanLine.length > 48 ? cleanLine.slice(0, 45).trim() + '…' : cleanLine;
 
   if (tags.length > 0) {
     return `📌 ${tags.join(' • ')} | ${shortPhrase}`;
@@ -447,37 +586,22 @@ function extractSmartSummaryFromNote_(rawText) {
   return `📌 ${shortPhrase}`;
 }
 
-/**
- * Пакетная упаковка всех длинных примечаний (K) в Заметки-Досье (B) на активном листе (из меню «📱 Управление»)
- */
-function packAllNotesIntoDossierOnActiveSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
-  const sheetName = sheet.getName().trim();
-  const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания", "4.Архив лидов"];
-
-  if (!crmSheets.includes(sheetName)) {
-    ss.toast('Перейдите на клиентский лист (Обзвон, Ожидание, Киты или Архив).', '⚠️ Внимание', 4);
-    return;
-  }
-
+function syncUnpackedNotesOnSheetSilent_(sheet) {
+  if (!sheet) return;
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
 
-  let packedCount = 0;
-  for (let r = 2; r <= lastRow; r++) {
-    const val = String(sheet.getRange(r, 11).getValue() || '').trim();
-    if (val) {
-      processRawNoteIntoDossier_(sheet, r);
-      packedCount++;
+  const numRows = lastRow - 1;
+  const kVals  = sheet.getRange(2, 11, numRows, 1).getValues();
+  const bNotes = sheet.getRange(2, 2, numRows, 1).getNotes();
+
+  for (let i = 0; i < numRows; i++) {
+    const rawK = String(kVals[i][0] || '').trim();
+    const noteB = String(bNotes[i][0] || '').trim();
+    if (rawK && (!noteB || !rawK.startsWith('📌'))) {
+      processRawNoteIntoDossier_(sheet, i + 2);
     }
   }
-
-  if (sheetName === "3. Лист ожидания") {
-    matchWarehouseWithWaitingList();
-  }
-
-  ss.toast(`Упаковано примечаний в карточки Досье (наведите мышь на название компании в колонке B): ${packedCount} шт.`, '🗂️ Досье обновлено', 6);
 }
 
 // =================================================================
@@ -502,15 +626,12 @@ function getAvailableStockDiamsMap_(ss) {
   return stockByDiam;
 }
 
-/**
- * Вычисляет живую тактику дожима (Колонка O / 15), анализируя H (Потребность), N (Историю), K (Выжимку) и B (Полное Досье)
- */
 function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
-  const sphere  = String(rowVals[6] || '').trim();  // G: Сфера
-  const need    = String(rowVals[7] || '').trim();  // H: Потребность сейчас
-  const notes   = String(rowVals[10] || '').trim(); // K: Примечание (выжимка)
-  const history = String(rowVals[13] || '').trim(); // N: История (логи)
-  const dossier = String(companyDossierNote || '').trim(); // Всплывающее Досье на ячейке B
+  const sphere  = String(rowVals[6] || '').trim();
+  const need    = String(rowVals[7] || '').trim();
+  const notes   = String(rowVals[10] || '').trim();
+  const history = String(rowVals[13] || '').trim();
+  const dossier = String(companyDossierNote || '').trim();
 
   const allContext = `${notes} ${dossier} ${history}`;
   const allLower   = allContext.toLowerCase();
@@ -518,14 +639,11 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
   const needLower = need.toLowerCase();
   const hasActiveNeed = need !== '' && needLower !== 'нет' && needLower !== '—' && needLower !== '-';
 
-  // Первая строка в Истории (последнее совершенное действие)
   const firstHistoryLine = (history.split('\n')[0] || '').trim();
 
-  // Флаг сложного клиента, который принимает по весам / меряет стенку (Допуск ГОСТ -12.5%)
-  const isScaleClient = /весы|взвеш|микрометр|толщиномер|хитро/i.test(allLower);
+  const isScaleClient = /весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(allLower);
   const scaleWarnTag  = isScaleClient ? ' [⚖️ ВЕСЫ: +10% к цене на допуск!]' : '';
 
-  // 1. ВЫСШИЙ ПРИОРИТЕТ: Выставлен счет / активная заявка в H
   if (firstHistoryLine.includes('💰') || firstHistoryLine.toLowerCase().includes('выставлен счет')) {
     const targetPipe = hasActiveNeed ? ` (${need})` : '';
     return `💰 ДОЖИМ СЧЕТА${targetPipe}: узнать проходную цену конкурента / дожать по теоретич. весу${scaleWarnTag}`;
@@ -540,7 +658,6 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     return `🔥 ГОРЯЩАЯ ЗАЯВКА (${need}): просчитать транзит + доставку (CPT) за 15 мин и выставить счет${scaleWarnTag}`;
   }
 
-  // 2. ПОСЛЕДНЕЕ ДЕЙСТВИЕ — НЕДОЗВОН: меняем канал связи
   const missMatch = firstHistoryLine.match(/Недозвон:\s*(\d+)\/4/i);
   if (missMatch) {
     const att = parseInt(missMatch[1], 10);
@@ -549,11 +666,9 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     return `⚠️ Недозвон (3/4 — последний шанс): пробить через общий номер / почту перед Архивом`;
   }
 
-  // Считаем число прошедших циклов прогрева (сдвигов, пингов), чтобы тактика постоянно вращалась!
   const shiftCount = (history.match(/🔄|Сдвиг|⏳|💰/gi) || []).length;
-  const kpSent     = /📧|Прайс|КП/i.test(history) || /кп|прайс/i.test(allLower);
+  const kpSent     = /📧|💬|📄|Прайс|КП/i.test(history) || /кп|прайс/i.test(allLower);
 
-  // 3. СНАЙПЕР СКЛАДА: в H сейчас «Нет», но в Истории (N) или Досье (K/B) есть диаметры, которые лежат на Складе!
   const pastDiams = Array.from(new Set((allContext.match(/\b\d{2,4}\b/g) || []).map(Number)))
     .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
   const stockHits = pastDiams.filter(d => stockByDiam[d]);
@@ -570,7 +685,6 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     }
   }
 
-  // 4. СПЕЦИАЛЬНЫЕ СЦЕНАРИИ ИЗ ДОСЬЕ КЛИЕНТА (На основе вашей «отсебятины» в K / B!)
   if (/аккредитац|реестр|служб.*безопасн/i.test(allLower) && shiftCount % 2 === 0) {
     return `📑 ДОСЬЕ (Аккредитация): проверить статус проверки наших документов в СБ и зайти в реестр поставщиков`;
   }
@@ -581,7 +695,6 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     return `💳 ДОСЬЕ (Финансирование): проверить, пошел ли транш от заказчика / предложить поставку мелкими партиями`;
   }
 
-  // 5. РОТАЦИЯ СТУПЕНЕЙ ПРОГРЕВА (Никогда не зависает на одном шаге!)
   if (!kpSent) {
     return `📧 ШАГ 1 (Якорь): выслать Прайс + Карточку компании (закрепить контакт снабженца)`;
   }
@@ -604,10 +717,14 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
 
 function refreshSingleRowTactic_(sheet, row) {
   if (!sheet || sheet.getName().trim() !== "3. Лист ожидания" || row < 2) return;
+  const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+  const hasAny = rowVals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
+  if (!hasAny) {
+    sheet.getRange(row, 15).clearContent().setBackground(null);
+    return;
+  }
   const ss = sheet.getParent();
   const stockByDiam = getAvailableStockDiamsMap_(ss);
-  const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
-  if (!rowVals[0] && !rowVals[1]) return;
   const dossierNote = sheet.getRange(row, 2).getNote();
   const tactic = computeDynamicTacticForRow_(rowVals, stockByDiam, dossierNote);
   sheet.getRange(row, 15).setValue(tactic);
@@ -667,13 +784,15 @@ function formatPipeNeed_(rawInput) {
   return str.replace(/\s+/g, ' ').trim();
 }
 
-function buildNeedSnapshot_(need, pipeType, application) {
-  const cleanNeed = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : '';
+function buildNeedSnapshot_(need, pipeType, application, customPrefix) {
+  const cleanNeed = (need && need.toLowerCase() !== 'нет' && need !== '—' && need !== '-') ? need : '';
   const details = [pipeType, application].filter(Boolean).join(' • ');
+  const label = customPrefix || 'Запрос';
+
   if (cleanNeed && details) {
-    return ` | Запрос: ${cleanNeed} (${details})`;
+    return ` | ${label}: ${cleanNeed} (${details})`;
   } else if (cleanNeed) {
-    return ` | Запрос: ${cleanNeed}`;
+    return ` | ${label}: ${cleanNeed}`;
   } else if (details) {
     return ` | Профиль: ${details}`;
   }
@@ -681,7 +800,7 @@ function buildNeedSnapshot_(need, pipeType, application) {
 }
 
 // =================================================================
-// ДВУХУРОВНЕВЫЙ БИРЖЕВОЙ РАДАР + ОБНОВЛЕНИЕ КОЛОНКИ O (ТАКТИКА)
+// ДВУХУРОВНЕВЫЙ БИРЖЕВОЙ РАДАР + СБРОС ЗАЛИПШИХ ПОДСВЕТОК В H
 // =================================================================
 
 function matchWarehouseWithWaitingList() {
@@ -701,9 +820,11 @@ function matchWarehouseWithWaitingList() {
     const sh = getSheetByNameSafe(ss, sName);
     if (!sh || sh.getLastRow() < 2) return;
 
+    syncUnpackedNotesOnSheetSilent_(sh);
+
     const lRow = sh.getLastRow();
-    const data = sh.getRange(2, 1, lRow - 1, 14).getValues(); // A..N
-    const compNotes = sh.getRange(2, 2, lRow - 1, 1).getNotes(); // Заметки-Досье на колонке B
+    const data = sh.getRange(2, 1, lRow - 1, 14).getValues();
+    const compNotes = sh.getRange(2, 2, lRow - 1, 1).getNotes();
     const needBgColors = [];
     const tacticsCol = [];
 
@@ -711,16 +832,16 @@ function matchWarehouseWithWaitingList() {
       const comp    = String(r[1] || '').trim();
       const lpr     = String(r[3] || '').trim();
       const ph      = String(r[4] || '').trim().split('\n')[0];
-      const needStr = String(r[7] || '').trim();  // H: Живая потребность сейчас
-      const notes   = String(r[10] || '').trim(); // K: Примечание
-      const histStr = String(r[13] || '').trim(); // N: История прошлых запросов
+      const needStr = String(r[7] || '').trim();
+      const notes   = String(r[10] || '').trim();
+      const histStr = String(r[13] || '').trim();
       const dossier = String((compNotes[idx] && compNotes[idx][0]) || '').trim();
 
       if (sName === "3. Лист ожидания") {
         tacticsCol.push([computeDynamicTacticForRow_(r, stockByDiam, dossier)]);
       }
 
-      const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—';
+      const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
 
       if (isNeedActive) {
         const liveDiams = Array.from(new Set((needStr.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
@@ -733,19 +854,17 @@ function matchWarehouseWithWaitingList() {
         }
       }
 
+      needBgColors.push([null]);
+
       const combinedPast = `${histStr} ${notes} ${dossier}`;
       const pastDiams = Array.from(new Set((combinedPast.match(/\b\d{2,4}\b/g) || []).map(Number)))
         .filter(d => STANDARD_PIPE_DIAMS_.includes(d) && stockByDiam[d]);
 
       if (pastDiams.length > 0) {
-        needBgColors.push(['#fef9c3']);
         historyMatches.push(
           `💡 [${sName.replace(/^\d+\.\s*/, '')}] ${comp || 'Клиент'} (${lpr || ph}): в истории/досье Ø ${pastDiams.join(', ')}`
         );
-        return;
       }
-
-      needBgColors.push([null]);
     });
 
     sh.getRange(2, 8, lRow - 1, 1).setBackgrounds(needBgColors);
@@ -759,12 +878,12 @@ function matchWarehouseWithWaitingList() {
     const preview = allMatches.slice(0, 14).join('\n');
     const more = allMatches.length > 14 ? `\n...и ещё ${allMatches.length - 14} совпадений!` : '';
     SpreadsheetApp.getUi().alert(
-      `🎯 Биржевой радар: Горячих (${hotMatches.length}) | Из истории и Досье (${historyMatches.length})`,
-      `Колонка O (Чем дожимать) обновлена! Зелёным в H подсвечен активный спрос, жёлтым — совпадения из Истории и Досье:\n\n${preview}${more}`,
+      `🎯 Биржевой радар: Горячих в H (${hotMatches.length}) | По Истории и Досье (${historyMatches.length})`,
+      `Колонка O (Чем дожимать) обновлена! Зелёным в H подсвечены только живые заявки, пустые/«Нет» очищены от подсветки:\n\n${preview}${more}`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
   } else {
-    ss.toast('Колонка O (Чем дожимать) обновлена! Прямых совпадений со складом пока не найдено.', '🔍 Радар обновлен', 5);
+    ss.toast('Колонка O обновлена, залипшие подсветки в H очищены!', '🔍 Радар обновлен', 5);
   }
 }
 
@@ -840,8 +959,8 @@ function moveRowToBottom_(sheet, row) {
   sheet.moveRows(sheet.getRange(row, 1, 1, sheet.getLastColumn()), lastRealRow + 1);
 }
 
-function highlightDuplicateInnsOnSheet_(sheet) {
-  const lastRow = sheet.getLastRow();
+function highlightDuplicateInnsOnSheet_(sheet, minRowToCover) {
+  const lastRow = Math.min(sheet.getMaxRows(), Math.max(sheet.getLastRow() + 5, minRowToCover || 2));
   if (lastRow < 2) return 0;
 
   const numRows = lastRow - 1;
@@ -962,9 +1081,6 @@ function mergeUniqueLines_(existingStr, newStr, separator) {
   return unique.join(sep);
 }
 
-/**
- * Вставка строки ИЛИ автоматическое слияние с существующей карточкой по ИНН (вместе со всплывающим Досье B!)
- */
 function insertOrMergeRowByInn_(targetSheet, rowValues, incomingDossierNote) {
   const incomingInn = String(rowValues[0] || '').replace(/\D/g, '');
   const maxRows = targetSheet.getMaxRows();
@@ -985,21 +1101,22 @@ function insertOrMergeRowByInn_(targetSheet, rowValues, incomingDossierNote) {
 
   if (existingRowIdx !== -1) {
     const oldRow = checkRange[existingRowIdx - 1];
+    const newNeed = (rowValues[7] && String(rowValues[7]).toLowerCase() !== 'нет') ? rowValues[7] : (oldRow[7] || "Нет");
     const mergedRow = [
       incomingInn || oldRow[0],
-      oldRow[1] || rowValues[1],                                     // B: Компания
-      oldRow[2] || rowValues[2],                                     // C: Город
-      mergeUniqueLines_(oldRow[3], rowValues[3], '\n'),              // D: ЛПР
-      formatRussianPhones_(mergeUniqueLines_(oldRow[4], rowValues[4], '\n')), // E: Телефон
-      mergeUniqueLines_(oldRow[5], rowValues[5], '\n'),              // F: E-mail
-      oldRow[6] || rowValues[6],                                     // G: Сфера
-      rowValues[7] || oldRow[7],                                     // H: Потребность
-      rowValues[8] || oldRow[8],                                     // I: Тип трубы
-      rowValues[9] || oldRow[9],                                     // J: Под что берут
-      mergeUniqueLines_(oldRow[10], rowValues[10], ' | '),           // K: Примечание (выжимка)
-      rowValues[11] || oldRow[11],                                   // L: Дедлайн
-      "",                                                            // M: Решение
-      prependHistoryLog_(oldRow[13], rowValues[13])                  // N: История
+      oldRow[1] || rowValues[1],
+      oldRow[2] || rowValues[2],
+      mergeUniqueLines_(oldRow[3], rowValues[3], '\n'),
+      formatRussianPhones_(mergeUniqueLines_(oldRow[4], rowValues[4], '\n')),
+      mergeUniqueLines_(oldRow[5], rowValues[5], '\n'),
+      oldRow[6] || rowValues[6],
+      newNeed,
+      rowValues[8] || oldRow[8],
+      rowValues[9] || oldRow[9],
+      mergeUniqueLines_(oldRow[10], rowValues[10], ' | '),
+      rowValues[11] || oldRow[11],
+      "",
+      prependHistoryLog_(oldRow[13], rowValues[13])
     ];
 
     targetSheet.getRange(existingRowIdx, 1).setNumberFormat('@');
@@ -1047,6 +1164,7 @@ function insertAndFormatRow_(targetSheet, rowValues) {
     templateRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
     templateRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
   }
+  targetRange.setBackground(null);
   targetSheet.getRange(targetRow, 1).setNumberFormat('@');
   targetSheet.getRange(targetRow, 5).setNumberFormat('@');
   targetRange.setValues([rowValues]);

@@ -1,6 +1,7 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.1)
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.3)
  * Файл: Main.gs — Главное меню, глобальные утилиты и маршрутизатор триггеров
+ * с автоматическим сбросом подсветок при очистке ячеек и пакетном удалении (Delete/Backspace).
  */
 
 function onOpen() {
@@ -10,20 +11,23 @@ function onOpen() {
     .addItem('📄 Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
     .addSeparator()
     .addItem('🎯 Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
-    .addItem('🗂️ Упаковать примечания (K) в карточки Досье (B)', 'packAllNotesIntoDossierOnActiveSheet')
     .addItem('🔍 Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
     .addItem('🧹 Отсортировать склад по диаметрам', 'sortWarehouseData')
     .addSeparator()
     .addItem('➕ Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
     .addToUi();
 
-  // Автоматическая подсветка дублей ИНН на активном листе при открытии таблицы
   try {
     const activeSheet = SpreadsheetApp.getActiveSheet();
-    if (activeSheet && typeof highlightDuplicateInnsOnSheet_ === 'function') {
+    if (activeSheet) {
       const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания", "4.Архив лидов"];
       if (crmSheets.includes(activeSheet.getName().trim())) {
-        highlightDuplicateInnsOnSheet_(activeSheet);
+        if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
+          highlightDuplicateInnsOnSheet_(activeSheet);
+        }
+        if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
+          syncUnpackedNotesOnSheetSilent_(activeSheet);
+        }
       }
     }
   } catch (e) {}
@@ -104,10 +108,10 @@ function onEdit(e) {
   ];
 
   if (crmSheets.includes(sheetName)) {
-    // Даже если вставили сразу пачку строк (Ctrl+V), автоматически подсвечиваем дубли ИНН
+    // Если выделено несколько ячеек (например, очистка через Delete/Backspace или вставка Ctrl+V)
     if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
-      if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
-        highlightDuplicateInnsOnSheet_(sheet);
+      if (typeof handleMultiCellCrmEdit_ === 'function') {
+        handleMultiCellCrmEdit_(e, sheet);
       }
       return;
     }
@@ -115,7 +119,12 @@ function onEdit(e) {
       handleCallingSheetEdit(e, sheet);
     }
   } else if (sheetName === "Склад") {
-    if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) return;
+    if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
+      if (typeof handleMultiCellWarehouseEdit_ === 'function') {
+        handleMultiCellWarehouseEdit_(e, sheet);
+      }
+      return;
+    }
     if (typeof handleWarehouseSheetEdit === 'function') {
       handleWarehouseSheetEdit(e, sheet);
     }

@@ -1,23 +1,7 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ
- * Файл: Warehouse.gs — Работа со складом (15 колонок A–O), расчеты, цех и калькулятор
- *
- * СТРУКТУРА ЛИСТА «СКЛАД» (15 колонок):
- * A (1):  Категория
- * B (2):  Позиция
- * C (3):  Состояние
- * D (4):  Ø мм
- * E (5):  Стенка мм
- * F (6):  ГОСТ / Сырье
- * G (7):  Закупка ₽/тн
- * H (8):  Продажа ₽/тн
- * I (9):  Продажа ₽/м
- * J (10): Наличие
- * K (11): Остаток тн
- * L (12): Остаток м
- * M (13): Сумма ₽
- * N (14): Примечания
- * O (15): Обновлено
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.3)
+ * Файл: Warehouse.gs — Работа со складом (15 колонок A–O), расчеты, цех, калькулятор
+ * и автоматический сброс подсветок при очистке ячеек или строк (Delete / Backspace).
  */
 
 const MIN_MARGIN_PER_TON = 3000;
@@ -41,7 +25,7 @@ function normalizePipeName(str) {
 function formatCleanPipeTitle_(str) {
   if (!str) return '';
   return str.toString()
-    .replace(/(\d)\s*[xX*]\s*(\d)/g, '\$1х\$2')
+    .replace(/(\d)\s*[xX*]\s*(\d)/g, '$1х$2')
     .replace(/[\s\u00A0]+/g, ' ')
     .trim();
 }
@@ -249,7 +233,6 @@ function executeBatchAddition(cartItems) {
       const newM  = Math.max(0, Math.round((currentM + addM) * 10) / 10);
       const newTn = Math.round(newM * weightPerMeterTn * 100) / 100;
 
-      // Средневзвешенная закупочная цена при пополнении существующей позиции
       const incomingBuyTn = safeParseFloat(item.buyPriceTn);
       if (incomingBuyTn > 0) {
         const oldBuyTn = safeParseFloat(sheet.getRange(row, 7).getValue());
@@ -302,7 +285,6 @@ function executeBatchRestoration(cartItems) {
     const weightPerMeterTn = ((diam - wall) * wall * 0.0246615) / 1000;
     if (weightPerMeterTn <= 0) throw new Error(`Ошибка геометрии у ${actualName}`);
 
-    // 1. Списываем с исходной строки Б/у
     const srcCurrentM = safeParseFloat(sheet.getRange(srcRow, 12).getValue());
     const moveM       = safeParseFloat(item.meters);
     const moveTn      = safeParseFloat(item.tons);
@@ -325,7 +307,6 @@ function executeBatchRestoration(cartItems) {
     }
     sheet.getRange(srcRow, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
 
-    // 2. Считаем новую себестоимость Восстановленной трубы (Закупка Б/у + Работа)
     const srcBuyTn      = safeParseFloat(sheet.getRange(srcRow, 7).getValue());
     const baseCostTn    = safeParseFloat(item.baseBuyPriceTn) || srcBuyTn;
     const serviceCostTn = safeParseFloat(item.serviceCostTn) || 0;
@@ -337,7 +318,6 @@ function executeBatchRestoration(cartItems) {
     const targetNotes   = (item.targetNotes || 'Пескоструй, фаска').toString().trim();
     const cleanPipeName = formatCleanPipeTitle_(`Труба ${diam}х${wall}`);
 
-    // 3. Ищем существующую строку «Восстановленная» с тем же Ø и Стенкой
     const lastRow = sheet.getLastRow();
     const allRows = sheet.getRange(3, 1, lastRow - 2, 15).getValues();
     let targetRow = -1;
@@ -418,16 +398,10 @@ function executeBatchRestoration(cartItems) {
   return `✅ Переработка (Б/у ➔ Восстановленная) выполнена!\n\n` + report.join("\n\n");
 }
 
-/**
- * Связка названия функции для вызова из Calculator.html
- */
 function executeBatchRestore(cartItems) {
   return executeBatchRestoration(cartItems);
 }
 
-/**
- * Копирование форматов и чип-списков из строки 3 (без навязывания списков в колонку G)
- */
 function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
   const templateRow = 3;
 
@@ -446,8 +420,8 @@ function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
     );
   });
 
-  // ИСПРАВЛЕНО: добавлена буква s на конце (.clearDataValidations)
   sheet.getRange(row, 7).clearDataValidations();
+  sheet.getRange(row, 1, 1, 15).setBackground(null);
 
   sheet.getRange(row, 4, 1, 3).setHorizontalAlignment("center");
   sheet.getRange(row, 10, 1, 3).setHorizontalAlignment("center");
@@ -455,6 +429,28 @@ function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
   sheet.getRange(row, 5).setNumberFormat((wall % 1 === 0) ? "0" : "0.0");
   sheet.setRowHeight(row, 32);
   sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
+}
+
+/**
+ * Сброс пустых строк на Складе (чтобы при удалении через Delete не оставался серый зачеркнутый фон от J="Нет")
+ */
+function cleanupWarehouseRowIfEmpty_(sheet, row) {
+  if (row < 3) return false;
+  const vals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+  // Проверяем, есть ли хоть что-то кроме одинокого статуса в J(10) или даты в O(15)
+  const hasCoreData = vals.some((v, idx) => idx !== 9 && v !== null && v !== undefined && String(v).trim() !== '');
+  if (hasCoreData) return false;
+
+  sheet.getRange(row, 1, 1, 15).clearContent().setBackground(null);
+  return true;
+}
+
+function handleMultiCellWarehouseEdit_(e, sheet) {
+  const startRow = Math.max(3, e.range.getRow());
+  const endRow = e.range.getLastRow();
+  for (let r = startRow; r <= endRow; r++) {
+    cleanupWarehouseRowIfEmpty_(sheet, r);
+  }
 }
 
 /**
@@ -467,14 +463,21 @@ function handleWarehouseSheetEdit(e, sheet) {
   const col = e.range.columnStart;
   if (row < 3) return;
 
+  if (cleanupWarehouseRowIfEmpty_(sheet, row)) return;
+
   const now = new Date();
   const ss = sheet.getParent();
 
-  // 1. АВТО-СОЗДАНИЕ СТРОКИ: Ввод названия в колонку B (2 - Позиция)
+  // 1. АВТО-СОЗДАНИЕ ИЛИ ОЧИСТКА СТРОКИ: Ввод/удаление названия в колонку B (2 - Позиция)
   if (col === 2) {
-    const rawInput = (e.value !== undefined ? e.value : sheet.getRange(row, 2).getValue()).toString().trim();
+    const rawInput = (e.value !== undefined ? e.value : sheet.getRange(row, 2).getValue() || '').toString().trim();
 
-    if (rawInput && !rawInput.toUpperCase().startsWith('ИТОГО')) {
+    if (!rawInput) {
+      cleanupWarehouseRowIfEmpty_(sheet, row);
+      return;
+    }
+
+    if (!rawInput.toUpperCase().startsWith('ИТОГО')) {
       const match = rawInput.match(/(\d{2,4})\s*(?:[хxX*\/x\-\s])\s*(\d+(?:[.,]\d+)?)(.*)/);
       if (match) {
         const diam = parseFloat(match[1]);
@@ -576,7 +579,6 @@ function handleWarehouseSheetEdit(e, sheet) {
     const val = safeParseFloat(rawVal);
     const buyPriceTn = safeParseFloat(col === 7 ? val : rowData[3]); // G (7)
 
-    // Изменение Закупки (G / 7)
     if (col === 7) {
       const curSellTn = safeParseFloat(rowData[4]); // H (8)
       if (val > 0 && curSellTn > 0 && (curSellTn - val) < MIN_MARGIN_PER_TON) {
@@ -586,7 +588,6 @@ function handleWarehouseSheetEdit(e, sheet) {
       return;
     }
 
-    // Изменение Продажи ₽/тн (H / 8)
     if (col === 8) {
       if (val > 0) {
         if (buyPriceTn > 0 && (val - buyPriceTn) < MIN_MARGIN_PER_TON) {
@@ -602,7 +603,6 @@ function handleWarehouseSheetEdit(e, sheet) {
         sheet.getRange(row, 13).clearContent();
       }
     }
-    // Изменение Продажи ₽/м (I / 9)
     else if (col === 9) {
       if (val > 0) {
         const priceTn = Math.round(val / weightPerMeterTn);
@@ -616,7 +616,6 @@ function handleWarehouseSheetEdit(e, sheet) {
         sheet.getRange(row, 13).clearContent();
       }
     }
-    // Изменение Метров (L / 12) -> пересчет Тонн (K / 11)
     else if (col === 12) {
       if (val > 0) {
         const newTn = Math.round(val * weightPerMeterTn * 100) / 100;
@@ -632,7 +631,6 @@ function handleWarehouseSheetEdit(e, sheet) {
         sheet.getRange(row, 13).clearContent();
       }
     }
-    // Изменение Тонн (K / 11) -> пересчет Метров (L / 12)
     else if (col === 11) {
       if (val > 0) {
         const newM = Math.round((val / weightPerMeterTn) * 10) / 10;
