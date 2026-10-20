@@ -570,11 +570,8 @@ function logClientPriceAction(payload) {
 
 /**
  * ПУНКТ 1: Динамическое получение подписи из настроек Gmail (Gmail.Users.Settings.SendAs)
- * - На ПК сохраняет ваш оригинальный крупный логотип (не режет его!) и ставит ширину 100% от карточки 660px,
- *   поэтому реквизиты «ООО «Капитал-Плюс» | ИНН ... | ОГРН ... | г. Воронеж...» на ПК идут в ОДНУ красивую строку (как на скрине image_802cff.jpg).
- * - На телефоне:
- *   1) Заменяет неразрывные пробелы (&nbsp;) внутри текста на обычные пробелы, чтобы «ОГРН 1083668004914» и слова в «Конфиденциальность» свободно переносились на новую строку, а не резались справа.
- *   2) Добавляет table-layout: fixed на внешнюю таблицу подписи и word-break: break-all на ссылку сайта capital-two-pi.vercel.app, чтобы сайт и ОГРН никогда не вылезали за правый край экрана телефона.
+ * - Подтягивает ровно ту подпись, которая сохранена у вас в настройках Gmail, БЕЗ какого-либо резервного шаблона (чтобы никогда не было дублей!).
+ * - Снимает узкий лимит max-width: 600px, чтобы подпись шла на всю ширину карточки письма (до 680px на ПК и 100% на телефоне), не сжимая логотип и не обрезая ИНН/ОГРН/Конфиденциальность.
  */
 function getSenderSignature() {
   try {
@@ -587,29 +584,15 @@ function getSenderSignature() {
           .replace(/<head[\s\S]*?<\/head>/gi, '')
           .replace(/<\/?html[^>]*>/gi, '')
           .replace(/<\/?body[^>]*>/gi, '')
-          // Убираем пустые верхние параграфы-распорки
           .replace(/^(?:\s*<p[^>]*>(?:&nbsp;|\s)*<\/p>\s*)+/i, '')
           .replace(/<div[^>]*padding-top:\s*(?:14|18|28)px[^>]*>(?:&nbsp;|\s)*<\/div>/gi, '')
-          // Заменяем неразрывные пробелы (&nbsp; и \u00A0) на обычные пробелы, чтобы ОГРН и Конфиденциальность не склеивались в длинную неразрывную строку на телефоне
           .replace(/&nbsp;|\u00A0/gi, ' ')
-          // На внешней таблице подписи ставим width: 100%; max-width: 100%; table-layout: fixed; — на ПК это дает полные 612px (реквизиты в 1 строку!), а на телефоне жестко держит рамку экрана
-          .replace(/max-width:\s*(?:\d+px|100%)\s*;?/gi, 'max-width: 100%; width: 100%; table-layout: fixed; box-sizing: border-box;')
-          // В таблице контактов возвращаем table-layout: auto; width: auto; чтобы телефоны стояли рядом с подписями
-          .replace(/(<table[^>]*font-size:\s*1[23](?:\.5)?px[^>]*style="[^"]*)/gi, '$1; table-layout: auto; width: auto; max-width: 100%;')
-          // Убираем жесткий min-width у ячейки логотипа, но САМУ КАРТИНКУ ЛОГОТИПА НЕ УМЕНЬШАЕМ (чтобы на ПК она была крупной и четкой, как было)
-          .replace(/min-width:\s*85px\s*;?/gi, '')
-          // Для длинных ссылок (сайт capital-two-pi.vercel.app и email) обязательно ставим word-break: break-all, чтобы на телефоне сайт не обрезался
-          .replace(/word-break:\s*break-word/gi, 'word-break: break-all')
-          .replace(/<td colspan="2"([^>]*)>/gi, '<td colspan="2"$1 style="padding-top: 14px; width: 100%; max-width: 100%; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; white-space: normal;">')
+          .replace(/max-width:\s*\d+px\s*;?/gi, 'max-width: 100%; width: 100%; box-sizing: border-box;')
           .replace(/НДС\s*20\s*%/gi, 'НДС 22%')
           .trim();
 
         return {
-          html: `
-            <div class="sig-wrap" style="margin-top: 20px; padding-top: 18px; border-top: 1px dashed #e2e8f0; width: 100%; max-width: 100%; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word;">
-              ${cleanedSig}
-            </div>
-          `,
+          html: `<div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;width:100%;box-sizing:border-box;word-wrap:break-word;overflow-wrap:break-word;">${cleanedSig}</div>`,
           isLive: true
         };
       }
@@ -622,8 +605,8 @@ function getSenderSignature() {
 }
 
 /**
- * УТИЛИТА ДЛЯ ОБНОВЛЕНИЯ ПОДПИСИ В САМОМ GMAIL (сохраняет крупный логотип на ПК и защищает от обрезки на телефоне):
- * Запустите makeMyGmailSignatureFluid() 1 раз в редакторе Apps Script (кнопка «Выполнить»).
+ * УТИЛИТА ДЛЯ ОБНОВЛЕНИЯ ПОДПИСИ В НАСТРОЙКАХ GMAIL:
+ * Обновляет вашу подпись в настройках Gmail (сохраняя ваш логотип <img>), чтобы она идеально отображалась и при обычной отправке писем из Gmail, и внутри КП на ПК, в телефоне и в Яндекс.Почте.
  */
 function makeMyGmailSignatureFluid() {
   if (typeof Gmail === 'undefined' || !Gmail.Users || !Gmail.Users.Settings) {
@@ -636,52 +619,31 @@ function makeMyGmailSignatureFluid() {
     throw new Error('Не найден профиль отправителя в Gmail.');
   }
 
-  // Сохраняем ваш оригинальный тег <img> логотипа в полном размере без урезания до 64px
   const currentSig = String(primary.signature || '');
   const imgMatch = currentSig.match(/<img\b[^>]*>/i);
   const logoHtml = imgMatch
-    ? imgMatch[0].replace(/max-width:\s*64px\s*;?/gi, 'max-width: 86px; width: 86px; display: block;')
-    : '<span style="color:#999999; font-size:12px;">[ЛОГОТИП]</span>';
+    ? imgMatch[0].replace(/max-width:\s*\d+px\s*;?/gi, 'max-width: 88px; width: 88px; height: auto; display: block;')
+    : 'ЛОГО';
 
-  const fluidSignatureHtml = `
-<table cellpadding="0" cellspacing="0" border="0" width="100%" style="font-family: Arial, sans-serif; font-size: 13px; color: #333333; width: 100%; max-width: 100%; table-layout: fixed; line-height: 1.4; border-collapse: collapse; box-sizing: border-box;">
-  <tr>
-    <td width="88" style="padding-right: 14px; vertical-align: middle; width: 88px; max-width: 88px; text-align: center;">
-      ${logoHtml}
-    </td>
-    <td style="border-left: 2px solid #0056b3; padding-left: 14px; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word;">
-      <div style="font-size: 17px; font-weight: bold; color: #000000; margin-bottom: 2px; line-height: 1.2;">ООО Капитал-Плюс</div>
-      <div style="font-size: 12px; color: #666666; margin-bottom: 10px; line-height: 1.3;">Отдел продаж и развития</div>
-      <table cellpadding="0" cellspacing="0" border="0" style="font-size: 12.5px; font-family: Arial, sans-serif; width: auto; max-width: 100%; table-layout: auto; border-collapse: collapse;">
-        <tr>
-          <td style="font-weight: bold; color: #0056b3; padding-right: 8px; padding-bottom: 4px; white-space: nowrap; vertical-align: top;">Моб / TG / WA:</td>
-          <td style="padding-bottom: 4px; white-space: nowrap;"><a href="tel:+79065883777" style="color: #333333; text-decoration: none; font-weight: 600;">+7 (906) 588-37-77</a></td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; color: #0056b3; padding-right: 8px; padding-bottom: 4px; white-space: nowrap; vertical-align: top;">Тел. офис:</td>
-          <td style="padding-bottom: 4px; white-space: nowrap;"><a href="tel:+74732797685" style="color: #333333; text-decoration: none;">+7 (473) 279-76-85</a></td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; color: #0056b3; padding-right: 8px; padding-bottom: 4px; white-space: nowrap; vertical-align: top;">Email:</td>
-          <td style="padding-bottom: 4px; word-break: break-all;"><a href="mailto:mail@kapital-p.ru" style="color: #0056b3; text-decoration: none; word-break: break-all;">mail@kapital-p.ru</a></td>
-        </tr>
-        <tr>
-          <td style="font-weight: bold; color: #0056b3; padding-right: 8px; white-space: nowrap; vertical-align: top;">Сайт:</td>
-          <td style="word-break: break-all;"><a href="https://capital-two-pi.vercel.app" target="_blank" style="color: #0056b3; text-decoration: none; word-break: break-all;">capital-two-pi.vercel.app</a></td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" style="padding-top: 14px; width: 100%; max-width: 100%; box-sizing: border-box; word-wrap: break-word; overflow-wrap: break-word; white-space: normal;">
-      <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 0 0 12px 0;">
-      <div style="font-size: 10.5px; color: #888888; line-height: 1.45; word-wrap: break-word; overflow-wrap: break-word; white-space: normal;">
-        <strong>ООО «Капитал-Плюс»</strong> | ИНН 3663070544 | ОГРН 1083668004914 | НДС 22% | г. Воронеж, ул. Волгоградская, д. 48, оф. 76<br><br>
-        <strong>Конфиденциальность:</strong> Данное электронное сообщение и любые приложения к нему являются конфиденциальными и предназначены исключительно для использования лицом или организацией, которым они адресованы. Если Вы не являетесь надлежащим адресатом, пожалуйста, немедленно сообщите об этом отправителю и удалите данное письмо.
-      </div>
-    </td>
-  </tr>
-</table>`.trim();
+  const fluidSignatureHtml = `<div style="font-family:Arial,Helvetica,sans-serif;color:#1e293b;width:100%;max-width:680px;box-sizing:border-box;">
+<table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:none;width:auto;max-width:100%;">
+<tr>
+<td valign="middle" align="center" style="padding:0 14px 0 0;vertical-align:middle;">${logoHtml}</td>
+<td valign="middle" style="border-left:2px solid #0284c7;padding:2px 0 2px 14px;vertical-align:middle;">
+<div style="font-family:Arial,sans-serif;font-size:15px;font-weight:700;color:#0f172a;line-height:1.2;margin:0;">ООО «Капитал-Плюс»</div>
+<div style="font-family:Arial,sans-serif;font-size:12px;color:#64748b;margin-top:2px;margin-bottom:6px;line-height:1.2;">Отдел продаж и развития</div>
+<table border="0" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12.5px;line-height:1.45;width:auto;max-width:100%;">
+<tr><td style="padding:1px 10px 1px 0;font-weight:700;color:#0284c7;white-space:nowrap;vertical-align:top;">Моб / TG / WA:</td><td style="padding:1px 0;color:#0f172a;white-space:nowrap;vertical-align:top;">+7 (906) 588-37-77</td></tr>
+<tr><td style="padding:1px 10px 1px 0;font-weight:700;color:#0284c7;white-space:nowrap;vertical-align:top;">Тел. офис:</td><td style="padding:1px 0;color:#0f172a;white-space:nowrap;vertical-align:top;">+7 (473) 279-76-85</td></tr>
+<tr><td style="padding:1px 10px 1px 0;font-weight:700;color:#0284c7;white-space:nowrap;vertical-align:top;">Email:</td><td style="padding:1px 0;vertical-align:top;word-break:break-word;"><a href="mailto:mail@kapital-p.ru" style="color:#2563eb;text-decoration:none;">mail@kapital-p.ru</a></td></tr>
+<tr><td style="padding:1px 10px 1px 0;font-weight:700;color:#0284c7;white-space:nowrap;vertical-align:top;">Сайт:</td><td style="padding:1px 0;vertical-align:top;word-break:break-word;"><a href="https://capital-two-pi.vercel.app" target="_blank" style="color:#2563eb;text-decoration:none;">capital-two-pi.vercel.app</a></td></tr>
+</table>
+</td>
+</tr>
+</table>
+<div style="border-top:1px solid #e2e8f0;margin-top:10px;padding-top:8px;font-family:Arial,sans-serif;font-size:11px;color:#64748b;line-height:1.45;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;"><strong>ООО «Капитал-Плюс»</strong> | ИНН 3663070544 | ОГРН 1083668004914 | НДС 22% | г. Воронеж, ул. Волгоградская, д. 48, оф. 76</div>
+<div style="margin-top:5px;font-family:Arial,sans-serif;font-size:10px;color:#94a3b8;line-height:1.35;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;"><strong>Конфиденциальность:</strong> Данное электронное сообщение и любые приложения к нему являются конфиденциальными и предназначены исключительно для использования лицом или организацией, которым они адресованы. Если Вы не являетесь надлежащим адресатом, пожалуйста, немедленно сообщите об этом отправителю и удалите данное письмо.</div>
+</div>`;
 
   Gmail.Users.Settings.SendAs.patch(
     { signature: fluidSignatureHtml },
@@ -690,9 +652,9 @@ function makeMyGmailSignatureFluid() {
   );
 
   try {
-    SpreadsheetApp.getUi().alert('Готово! Подпись в Gmail обновлена: на ПК крупный логотип и реквизиты в 1 строку, на телефоне ничего не обрезается.');
+    SpreadsheetApp.getUi().alert('Готово! Подпись в настройках Gmail обновлена.');
   } catch (e) {
-    Logger.log('Подпись в Gmail успешно обновлена.');
+    Logger.log('Подпись в настройках Gmail успешно обновлена.');
   }
 }
 
@@ -785,7 +747,7 @@ function buildDynamicSubject(items, clientCompany, chosenLpr, variantSeed) {
     condSummary = joinRussianList_(parts);
   }
 
-  // 1 позиция — тема с размером и состоянием
+  // 1 позиция — тема с размером и состоянием (8 разнообразных вариантов)
   if (items.length === 1) {
     const it = items[0];
     const diamWall = (it.diam && it.wall) ? `${it.diam}х${it.wall}` : it.name;
@@ -797,12 +759,16 @@ function buildDynamicSubject(items, clientCompany, chosenLpr, variantSeed) {
       `${lprGreeting}труба ${diamWall}${cond} в наличии на складе в Воронеже${priceBrief}${companyTag}`,
       `${lprGreeting}коммерческое предложение: труба ${diamWall}${cond}${stockBrief}${priceBrief}${companyTag}`,
       `${lprGreeting}расчет и наличие по трубе ${diamWall}${cond} (склад г. Воронеж)${companyTag}`,
-      `${lprGreeting}спецификация на трубу ${diamWall}${cond} из наличия${priceBrief}${companyTag}`
+      `${lprGreeting}спецификация на трубу ${diamWall}${cond} из наличия${priceBrief}${companyTag}`,
+      `${lprGreeting}предложение на поставку трубы ${diamWall}${cond} • Капитал-Плюс${priceBrief}${companyTag}`,
+      `${lprGreeting}наличие и стоимость: труба стальная ${diamWall}${cond} (г. Воронеж)${companyTag}`,
+      `${lprGreeting}отгрузка со склада в Воронеже: труба ${diamWall}${cond}${stockBrief}${priceBrief}${companyTag}`,
+      `${lprGreeting}прайс и наличие по позиции: труба ${diamWall}${cond}${priceBrief}${companyTag}`
     ];
     return pickRandom(singleTemplates);
   }
 
-  // 2–4 позиции / диаметра — перечисление диаметров через союз «и»
+  // 2–4 позиции / диаметра — перечисление диаметров через союз «и» (8 разнообразных вариантов)
   if (items.length >= 2 && items.length <= 4 && diamList.length <= 4) {
     const listForJoin = diamList.length >= 2
       ? diamList.map(d => `${d} мм`)
@@ -814,7 +780,11 @@ function buildDynamicSubject(items, clientCompany, chosenLpr, variantSeed) {
       `${lprGreeting}коммерческое предложение на трубы ${diamStr}${desc} со склада в Воронеже${companyTag}`,
       `${lprGreeting}подборка стальных труб ${diamStr}${desc} из наличия${minPriceStr}${companyTag}`,
       `${lprGreeting}наличие и цены по трубам ${diamStr}${desc} • Капитал-Плюс${companyTag}`,
-      `${lprGreeting}спецификация по трубам ${diamStr}${desc} (склад г. Воронеж)${minPriceStr}${companyTag}`
+      `${lprGreeting}спецификация по трубам ${diamStr}${desc} (склад г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}расчет стоимости на трубы ${diamStr}${desc} со склада${minPriceStr}${companyTag}`,
+      `${lprGreeting}предложение по наличию труб ${diamStr}${desc} (г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}актуальные цены на трубы ${diamStr}${desc} в наличии${minPriceStr}${companyTag}`,
+      `${lprGreeting}поставка труб ${diamStr}${desc} с базы в Воронеже • Капитал-Плюс${companyTag}`
     ];
     return pickRandom(multiTemplates);
   }
@@ -827,12 +797,16 @@ function buildDynamicSubject(items, clientCompany, chosenLpr, variantSeed) {
       `${lprGreeting}коммерческое предложение на трубы ${diamStr}${desc} со склада в Воронеже${companyTag}`,
       `${lprGreeting}подборка стальных труб ${diamStr}${desc} из наличия${minPriceStr}${companyTag}`,
       `${lprGreeting}наличие и цены по трубам ${diamStr}${desc} • Капитал-Плюс${companyTag}`,
-      `${lprGreeting}спецификация по трубам ${diamStr}${desc} (склад г. Воронеж)${minPriceStr}${companyTag}`
+      `${lprGreeting}спецификация по трубам ${diamStr}${desc} (склад г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}расчет стоимости на трубы ${diamStr}${desc} со склада${minPriceStr}${companyTag}`,
+      `${lprGreeting}предложение по наличию труб ${diamStr}${desc} (г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}актуальные цены на трубы ${diamStr}${desc} в наличии${minPriceStr}${companyTag}`,
+      `${lprGreeting}поставка труб ${diamStr}${desc} с базы в Воронеже • Капитал-Плюс${companyTag}`
     ];
     return pickRandom(multiTemplates);
   }
 
-  // Полный прайс — диапазон (мин–макс диаметры) со складом в Воронеже и ценой «от ... ₽/тн»
+  // Полный прайс — диапазон (мин–макс диаметры) со складом в Воронеже и ценой «от ... ₽/тн» (10 разнообразных вариантов БЕЗ «складских справок»)
   if (diamList.length >= 2) {
     const minD = diamList[0];
     const maxD = diamList[diamList.length - 1];
@@ -840,9 +814,15 @@ function buildDynamicSubject(items, clientCompany, chosenLpr, variantSeed) {
 
     const fullTemplates = [
       `${lprGreeting}наличие труб ${minD}–${maxD} мм на складе в Воронеже${minPriceStr}${companyTag}`,
-      `${lprGreeting}складская справка по стальным трубам ${minD}–${maxD} мм${desc} • г. Воронеж${minPriceStr}${companyTag}`,
       `${lprGreeting}актуальный прайс-лист на трубы ${minD}–${maxD} мм со склада в Воронеже${minPriceStr}${companyTag}`,
-      `${lprGreeting}коммерческое предложение: трубный прокат ${minD}–${maxD} мм${desc} (г. Воронеж)${minPriceStr}${companyTag}`
+      `${lprGreeting}коммерческое предложение: трубный прокат ${minD}–${maxD} мм${desc} (г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}наличие и цены на стальные трубы Ø ${minD}–${maxD} мм${desc} • Капитал-Плюс${companyTag}`,
+      `${lprGreeting}прайс-лист и остатки труб ${minD}–${maxD} мм${desc} на базе в Воронеже${minPriceStr}${companyTag}`,
+      `${lprGreeting}предложение на поставку стальных труб ${minD}–${maxD} мм из наличия${minPriceStr}${companyTag}`,
+      `${lprGreeting}трубы стальные Ø ${minD}–${maxD} мм${desc} со склада в Воронеже${minPriceStr}${companyTag}`,
+      `${lprGreeting}актуальное наличие трубного проката ${minD}–${maxD} мм${desc} • г. Воронеж${companyTag}`,
+      `${lprGreeting}спецификация и цены на трубы ${minD}–${maxD} мм со склада (г. Воронеж)${minPriceStr}${companyTag}`,
+      `${lprGreeting}подборка труб ${minD}–${maxD} мм${desc} в наличии на базе в Воронеже${minPriceStr}${companyTag}`
     ];
     return pickRandom(fullTemplates);
   }
@@ -895,7 +875,7 @@ function sendBatchProposals(data) {
     }
 
     const aliases = GmailApp.getAliases();
-    const senderAlias = aliases.length > 0 ? aliases[0] : null;
+    const senderAlias = aliases.find(a => String(a).toLowerCase().includes("kapital-p.ru")) || (aliases.length > 0 ? aliases[0] : null);
     const userSignature = getSenderSignature();
 
     // Группируем позиции строго в порядке: Новые -> Лежалые -> Восстановленные -> Б/у
@@ -928,8 +908,22 @@ function sendBatchProposals(data) {
       // Текстовая версия письма с группировкой по категориям
       let plain = [];
       plain.push(`Здравствуйте${clientLprGreeting}!\r\n`);
-      plain.push(clientCompany
-        ? `Направляем актуальное коммерческое предложение по наличию трубного металлопроката со склада для компании «${clientCompany}»:\r\n`
+      const cleanCompanyDisplay = clientCompany
+        ? clientCompany
+            .replace(/^[«"”„']+|[»"”„']+$/g, "")
+            .replace(/[«"”„']+/g, "")
+            .replace(/^(ООО|АО|ЗАО|ПАО|ИП)\s+(.+)$/i, "$1 «$2»")
+            .trim()
+        : "";
+      const companyFormattedPlain = cleanCompanyDisplay
+        ? (cleanCompanyDisplay.includes("«") ? cleanCompanyDisplay : `«${cleanCompanyDisplay}»`)
+        : "";
+      const companyFormattedHtml = companyFormattedPlain
+        .replace(/\s+/g, "&nbsp;")
+        .replace(/-/g, "&#8209;");
+
+      plain.push(companyFormattedPlain
+        ? `Направляем актуальное коммерческое предложение по наличию трубного металлопроката со склада для компании ${companyFormattedPlain}:\r\n`
         : `Направляем актуальное коммерческое предложение по наличию трубного металлопроката с нашей базы:\r\n`
       );
 
@@ -954,153 +948,94 @@ function sendBatchProposals(data) {
 
       const plainBody = plain.join("\r\n");
 
-      // СТРОКИ ТАБЛИЦЫ С АККУРАТНОЙ ГРУППИРОВКОЙ
+      // УЛЬТРА-ЛЕГКИЕ СТРОКИ ТАБЛИЦЫ (БЕЗ ЛИШНИХ ПРОБЕЛОВ, КЛАССОВ И ДУБЛЕЙ — ЧТОБЫ ПИСЬМО ВЕСИЛО < 45 КБ И GMAIL НЕ ОБРЕЗАЛ ПОДПИСЬ КНОПКОЙ «ПОКАЗАТЬ ПОЛНОСТЬЮ»!)
       let rowsHtml = "";
       groupedBlocks.forEach((block, bIdx) => {
-        const topPad = bIdx === 0 ? "14px" : "20px";
-        rowsHtml += `
-          <tr>
-            <td colspan="4" style="padding: ${topPad} 10px 7px 10px; background-color: #ffffff; border-bottom: 1.5px solid #cbd5e1; text-align: left;">
-              <span style="font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: -0.1px;">${block.groupTitle}</span>
-              <span style="font-size: 11px; font-weight: 500; color: #64748b; margin-left: 6px;">(${block.items.length} поз.)</span>
-            </td>
-          </tr>
-        `;
+        const topPad = bIdx === 0 ? "12px" : "18px";
+        rowsHtml += `<tr><td colspan="4" style="padding:${topPad} 10px 6px;background:#fff;border-bottom:2px solid #cbd5e1;text-align:left;"><b style="font-size:13.5px;color:#0f172a;">${block.groupTitle}</b> <span style="font-size:11px;color:#64748b;">(${block.items.length} поз.)</span></td></tr>`;
 
         block.items.forEach((it, idx) => {
-          const rowBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
+          const bg = idx % 2 === 0 ? "#fff" : "#f8fafc";
           const formattedGost = formatGostClean_(it.gost || it.std);
-          const techInfo = [it.category, it.condition, formattedGost].filter(Boolean).join(' &bull; ');
-          const techLine = techInfo
-            ? '<div style="font-size: 11px; color: #64748b; margin-top: 2px; line-height: 1.25;">' + techInfo + '</div>'
-            : '';
+          const techInfo = [it.category, formattedGost].filter(Boolean).join(' &bull; ');
+          const techLine = techInfo ? `<div style="font-size:11px;color:#64748b;margin-top:2px;line-height:1.25;">${techInfo}</div>` : '';
 
           const rawStock = String(it.stock || it.stockText || '').trim();
           const stockParts = rawStock.split('/').map(s => s.trim()).filter(Boolean);
-          let stockCellHtml = '';
-          if (stockParts.length === 2) {
-            stockCellHtml = `<div style="font-size: 12.5px; font-weight: 700; color: #0f172a; line-height: 1.2;">${stockParts[0]}</div><div style="font-size: 10.5px; color: #64748b; font-weight: 500; margin-top: 2px; line-height: 1.2;">${stockParts[1]}</div>`;
-          } else {
-            stockCellHtml = `<div style="font-size: 12px; font-weight: 600; color: #334155; line-height: 1.2;">${rawStock}</div>`;
-          }
+          const stockHtml = stockParts.length === 2
+            ? `<div style="font-size:12.5px;font-weight:700;color:#0f172a;line-height:1.2;white-space:nowrap;">${stockParts[0]}</div><div style="font-size:10.5px;color:#64748b;margin-top:1px;line-height:1.2;white-space:nowrap;">${stockParts[1]}</div>`
+            : `<div style="font-size:12px;font-weight:600;color:#334155;line-height:1.2;white-space:nowrap;">${rawStock}</div>`;
 
-          rowsHtml += `
-            <tr style="background-color: ${rowBg}; border-bottom: 1px solid #f1f5f9;">
-              <td class="cell-pad" style="padding: 8px 4px; color: #334155; font-size: 12.5px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word;">
-                <div style="font-weight: 700; color: #0f172a; font-size: 13px; line-height: 1.25;">${it.name}</div>
-                ${techLine}
-              </td>
-              <td class="cell-pad" style="padding: 8px 2px; text-align: center; color: #1e293b; font-size: 12px; font-weight: 600; white-space: normal; word-break: break-word; vertical-align: middle;">
-                &empty;&nbsp;${it.diam}&times;${it.wall}
-              </td>
-              <td class="cell-pad" style="padding: 8px 2px; text-align: center; vertical-align: middle;">
-                ${stockCellHtml}
-              </td>
-              <td class="cell-pad" style="padding: 8px 4px; text-align: right; white-space: nowrap; vertical-align: middle;">
-                <div style="font-size: 13px; font-weight: 800; color: #0f172a; line-height: 1.2;">
-                  ${it.priceTn}
-                </div>
-                <div style="font-size: 10px; color: #64748b; font-weight: 500; margin-top: 2px;">
-                  ${it.priceM}/м
-                </div>
-              </td>
-            </tr>
-          `;
+          const priceMHtml = (it.priceM && it.priceM !== '—' && it.priceM !== '-')
+            ? `<div style="font-size:10.5px;color:#64748b;margin-top:1px;white-space:nowrap;">${it.priceM}/м</div>`
+            : '';
+
+          rowsHtml += `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">` +
+            `<td class="cp" align="left" style="padding:9px 6px 9px 10px;color:#0f172a;font-size:13px;vertical-align:middle;"><div style="font-weight:700;line-height:1.25;">${it.name}</div>${techLine}</td>` +
+            `<td class="cp" align="center" style="padding:9px 4px;text-align:center;color:#0f172a;font-size:12.5px;font-weight:700;white-space:nowrap;vertical-align:middle;">&empty;&nbsp;${it.diam}&times;${it.wall}</td>` +
+            `<td class="cp" align="center" style="padding:9px 4px;text-align:center;vertical-align:middle;">${stockHtml}</td>` +
+            `<td class="cp" align="right" style="padding:9px 10px 9px 6px;text-align:right;white-space:nowrap;vertical-align:middle;"><div style="font-size:13.5px;font-weight:800;color:#0f172a;line-height:1.2;white-space:nowrap;">${it.priceTn}</div>${priceMHtml}</td>` +
+            `</tr>`;
         });
       });
 
-      const commentHtml = customComment ? `
-        <div style="margin: 14px 0 16px 0; padding: 14px 16px; background-color: #f8fafc; border-left: 3px solid #475569; border-radius: 6px; font-size: 13px; color: #334155; line-height: 1.5; word-wrap: break-word;">
-          <strong style="color: #0f172a; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Условия поставки / Примечание:</strong>
-          ${customComment.replace(/\n/g, '<br>')}
-        </div>
-      ` : "";
+      const commentHtml = customComment
+        ? `<div style="margin:12px 0 14px;padding:12px 14px;background:#f8fafc;border-left:3px solid #0284c7;border-radius:6px;font-size:13px;color:#334155;line-height:1.5;"><b style="color:#0f172a;text-transform:uppercase;font-size:10.5px;display:block;margin-bottom:3px;">Условия поставки / Примечание:</b>${customComment.replace(/\n/g, '<br>')}</div>`
+        : "";
 
-      const introText = clientCompany
-        ? `Направляем актуальное коммерческое предложение по наличию трубного металлопроката со склада для компании «${clientCompany}»:`
-        : `Направляем актуальное коммерческое предложение по наличию трубного металлопроката с нашей базы:`;
+      const introText = companyFormattedHtml
+        ? `Направляем актуальное коммерческое предложение по наличию трубного металлопроката со склада для компании <b style="color:#0f172a;white-space:nowrap;">${companyFormattedHtml}</b>:`
+        : `Направляем актуальное коммерческое предложение по наличию трубного металлопроката с нашей складской базы:`;
 
-      // ШИРОКАЯ КАРТОЧКА 660px КАК НА СКРИНШОТАХ «КАК БЫЛО» (image_8028fc.png и image_802cff.jpg)
-      // + МОБИЛЬНАЯ АДАПТАЦИЯ ПОДПИСИ НА ТЕЛЕФОНЕ (чуть меньше масштаб внизу, чтобы ОГРН, сайт и Конфиденциальность не резались)
-      const htmlBody = `<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-    @media only screen and (max-width: 620px) {
-      .outer-body { padding: 4px 0 !important; }
-      .card-header-cell { padding: 14px 10px !important; }
-      .card-body-cell { padding: 12px 4px !important; }
-      .cell-pad { padding: 6px 2px !important; }
-      .cell-pad div { font-size: 11.5px !important; }
-      .sig-wrap { font-size: 12.5px !important; }
-      .sig-wrap table { font-size: 12.5px !important; }
-      .sig-wrap img { max-width: 60px !important; height: auto !important; }
-      .sig-wrap td { padding-top: 3px !important; padding-bottom: 3px !important; }
-    }
-  </style>
-</head>
-<body class="outer-body" style="margin: 0; padding: 20px 10px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; -webkit-text-size-adjust: 100%;">
-  <div style="width: 100%; max-width: 760px; margin: 0 auto; box-sizing: border-box;">
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="width: 100%; max-width: 760px; table-layout: fixed; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; border-collapse: separate; box-sizing: border-box;">
-      <tr>
-        <td class="card-header-cell" style="background-color: #0f172a; padding: 24px 26px; color: #ffffff; border-radius: 11px 11px 0 0;">
-          <table width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="vertical-align: middle; text-align: left; padding-right: 10px;">
-                <div style="font-size: 21px; font-weight: 900; letter-spacing: -0.4px; color: #ffffff; line-height: 1.15;">
-                  ООО «КАПИТАЛ-ПЛЮС»
-                </div>
-                <div style="font-size: 12.5px; color: #94a3b8; margin-top: 4px; line-height: 1.3;">
-                  Поставки трубного металлопроката со склада &bull; г. Воронеж
-                </div>
-              </td>
-              <td style="vertical-align: middle; text-align: right; width: 130px; white-space: nowrap;">
-                <span style="display: inline-block; padding: 6px 13px; background-color: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
-                  База: г. Воронеж
-                </span>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-      <tr>
-        <td class="card-body-cell" style="padding: 24px 20px; width: 100%; box-sizing: border-box;">
-          <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">
-            Здравствуйте${clientLprGreeting}!
-          </div>
-          <div style="font-size: 13.5px; color: #475569; line-height: 1.5; margin-bottom: 16px; word-wrap: break-word;">
-            ${introText}
-          </div>
-          ${commentHtml}
-          <table width="100%" border="0" cellpadding="0" cellspacing="0" style="width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 8px;">
-            <thead>
-              <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; font-size: 10px; color: #475569; letter-spacing: 0.4px;">
-                <th align="left" style="padding: 8px 4px; font-weight: 700; width: 34%;">Наименование</th>
-                <th align="center" style="padding: 8px 2px; font-weight: 700; width: 22%;">Размер</th>
-                <th align="center" style="padding: 8px 2px; font-weight: 700; width: 22%;">Остаток</th>
-                <th align="right" style="padding: 8px 4px; font-weight: 700; width: 22%;">Цена</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-
-          <div style="margin-top: 22px; padding: 14px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 12.5px; color: #475569; line-height: 1.65; word-wrap: break-word;">
-            &bull; <strong style="color: #0f172a;">База отгрузки:</strong> г. Воронеж (металл в наличии на складе).<br>
-            &bull; <strong style="color: #0f172a;">Логистика:</strong> Помощь с организацией попутной и прямой доставки по РФ.<br>
-            &bull; <strong style="color: #0f172a;">Расчёт:</strong> Все цены указаны с учётом НДС 22%. Выставим счёт за 10 минут.
-          </div>
-
-          ${userSignature.html}
-        </td>
-      </tr>
-    </table>
-  </div>
-</body>
-</html>`;
+      // КОМПАКТНЫЙ СОВРЕМЕННЫЙ КАРКАС (< 45 КБ ДАЖЕ НА ПОЛНОМ ПРАЙСЕ — БЕЗ КНОПКИ «ПОКАЗАТЬ ПОЛНОСТЬЮ» И С ПОЛНОЙ ШИРИНОЙ НА ТЕЛЕФОНЕ, ПК И ЯНДЕКСЕ)
+      const htmlBody = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>
+body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+@media only screen and (max-width:640px){
+.ow{padding:0!important}
+.ec{width:100%!important;max-width:100%!important;border-radius:0!important;border-left:none!important;border-right:none!important}
+.ch{padding:16px 12px!important}
+.ht{font-size:16.5px!important}
+.cb{padding:14px 8px!important}
+.cp{padding:8px 4px!important}
+}
+</style></head>
+<body style="margin:0;padding:0;width:100%!important;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" bgcolor="#f1f5f9" style="width:100%;background:#f1f5f9;border-collapse:collapse;">
+<tr><td align="center" class="ow" style="padding:16px 8px;">
+<table class="ec" align="center" width="680" border="0" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="width:100%;max-width:680px;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;overflow:hidden;border-collapse:separate;">
+<tr><td class="ch" bgcolor="#0f172a" style="background:#0f172a;padding:20px 24px;color:#ffffff;border-bottom:3px solid #0284c7;">
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>
+<td align="left" valign="middle" style="padding-right:8px;">
+<div class="ht" style="font-size:19px;font-weight:900;letter-spacing:-0.3px;color:#ffffff;line-height:1.15;white-space:nowrap;">ООО&nbsp;«КАПИТАЛ&#8209;ПЛЮС»</div>
+<div style="font-size:12px;color:#94a3b8;margin-top:4px;line-height:1.3;">Поставки трубного металлопроката со склада &bull; г. Воронеж</div>
+</td>
+<td align="right" valign="middle" style="white-space:nowrap;">
+<span style="display:inline-block;padding:5px 10px;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#f8fafc;font-size:11px;font-weight:600;white-space:nowrap;">База: г. Воронеж</span>
+</td>
+</tr></table>
+</td></tr>
+<tr><td class="cb" style="padding:20px 22px;width:100%;box-sizing:border-box;">
+<div style="font-size:15.5px;font-weight:700;color:#0f172a;margin-bottom:5px;">Здравствуйте${clientLprGreeting}!</div>
+<div style="font-size:13.5px;color:#475569;line-height:1.45;margin-bottom:14px;">${introText}</div>
+${commentHtml}
+<table width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+<thead><tr bgcolor="#f8fafc" style="background:#f8fafc;border-bottom:2px solid #cbd5e1;text-transform:uppercase;font-size:10px;color:#475569;letter-spacing:0.4px;">
+<th align="left" width="42%" style="padding:9px 6px 9px 10px;font-weight:700;text-align:left;">Наименование</th>
+<th align="center" width="18%" style="padding:9px 4px;font-weight:700;text-align:center;white-space:nowrap;">Размер</th>
+<th align="center" width="18%" style="padding:9px 4px;font-weight:700;text-align:center;">Остаток</th>
+<th align="right" width="22%" style="padding:9px 10px 9px 6px;font-weight:700;text-align:right;white-space:nowrap;">Цена с НДС</th>
+</tr></thead>
+<tbody>${rowsHtml}</tbody>
+</table>
+<div style="margin-top:16px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#475569;line-height:1.6;">
+&bull; <b style="color:#0f172a;">База отгрузки:</b> г. Воронеж (металл в наличии на складе).<br>
+&bull; <b style="color:#0f172a;">Логистика:</b> Помощь с организацией попутной и прямой доставки по РФ.<br>
+&bull; <b style="color:#0f172a;">Расчёт:</b> Все цены указаны с учётом НДС 22%. Выставим счёт за 10 минут.
+</div>
+${userSignature.html}
+</td></tr>
+</table>
+</td></tr></table></body></html>`;
 
       const emailOptions = {
         htmlBody: htmlBody,
