@@ -2,6 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Складская справка и рассылка КП • КАПИТАЛ-ПЛЮС</title>
   <base target="_top">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
@@ -13,256 +15,618 @@
       --text-main: #334155;
       --text-muted: #64748b;
       --border-light: #e2e8f0;
+      --border-soft: #f1f5f9;
       --bg-app: #f8fafc;
       --bg-white: #ffffff;
-      --bg-row-hover: #f1f5f9;
+      --bg-row-hover: #f8fafc;
       --bg-row-selected: #eff6ff;
       --success: #16a34a;
       --radius-lg: 12px;
       --radius-md: 8px;
     }
 
+    * { box-sizing: border-box; }
+
     body {
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       color: var(--text-main);
       margin: 0;
-      padding: 16px 20px;
-      font-size: 13px;
+      padding: 20px 24px 36px 24px;
+      font-size: 13.5px;
       line-height: 1.5;
       background-color: var(--bg-app);
       -webkit-font-smoothing: antialiased;
     }
 
+    /* Идеальное центрирование кнопки при сворачивании окна */
     body.is-minimized {
-      padding: 6px !important;
+      padding: 0 !important;
+      margin: 0 !important;
       overflow: hidden !important;
       background-color: #ffffff !important;
+      height: 100vh !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
 
-    * { box-sizing: border-box; }
+    #minimizedRestoreBar {
+      display: none;
+      width: 100%;
+      height: 100%;
+      padding: 4px 6px;
+      align-items: center;
+      justify-content: center;
+    }
+    body.is-minimized #minimizedRestoreBar {
+      display: flex !important;
+    }
+    .btn-restore-full {
+      width: 100%;
+      height: 40px;
+      background: #0f172a;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+      padding: 0 12px;
+    }
+    .btn-restore-full:hover { background: #1e293b; }
 
-    /* БЛОК 1: ВЕРХНИЙ ПУЛЬТ КЛИЕНТА И ОТПРАВКИ */
-    .client-command-bar {
+    /* Уведомления */
+    .toast-banner {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 440px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+      z-index: 99999;
+      border-left: 4px solid #2563eb;
+    }
+    .toast-banner.toast-success { border-left-color: #16a34a; }
+    .toast-banner.toast-warn { border-left-color: #d97706; }
+    .toast-banner.toast-error { border-left-color: #dc2626; }
+
+    /* =================================================================
+       ВОЗДУШНЫЙ ЕДИНЫЙ ЛИСТ ДОКУМЕНТА (БЕЗ РАМОК-ПРЯМОУГОЛЬНИКОВ)
+       ================================================================= */
+    .document-wrapper {
       background: var(--bg-white);
-      border: 1px solid #cbd5e1;
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 32px 40px;
       border-radius: var(--radius-lg);
-      padding: 14px 18px;
-      margin-bottom: 14px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
     }
 
-    .top-bar-row {
+    /* БЛОК 1 (ВЕРХ): ШАПКА «СКЛАДСКАЯ СПРАВКА • КАПИТАЛ-ПЛЮС» */
+    .top-warehouse-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .brand-left {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .doc-title {
+      color: var(--brand-blue);
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .company-brand {
+      color: var(--brand-darker);
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      line-height: 1.05;
+      margin: 2px 0 4px 0;
+    }
+
+    .info-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .header-right-wrap {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .contact-card {
+      text-align: right;
+      line-height: 1.4;
+    }
+    .contact-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+    }
+    .contact-name {
+      font-size: 14.5px;
+      color: var(--brand-dark);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .contact-phone {
+      font-size: 20px;
+      color: var(--brand-blue);
+      font-weight: 900;
+      margin-top: 2px;
+      letter-spacing: -0.3px;
+    }
+
+    /* =================================================================
+       БЛОК 2 (ЦЕНТР): ВОЗДУШНЫЙ ПУЛЬТ ВЫБОРА КЛИЕНТОВ И ОТПРАВКИ КП
+       (Без тяжелых рамок и прямоугольников)
+       ================================================================= */
+    .send-dispatch-center {
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .dispatch-header-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
+      margin-bottom: 14px;
     }
 
-    .client-selector-wrap {
+    .dispatch-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--brand-darker);
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex: 1;
-      min-width: 300px;
-      position: relative;
+      gap: 10px;
     }
 
-    .client-search-input {
+    .dispatch-count-pill {
+      color: var(--text-muted);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .dispatch-count-pill.has-items {
+      color: var(--brand-blue);
+      font-weight: 700;
+    }
+
+    /* Крупное и воздушное поле поиска клиентов */
+    .client-search-box-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .client-search-field-container {
       flex: 1;
-      padding: 9px 12px;
-      border: 1px solid #cbd5e1;
+      min-width: 320px;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .client-search-input-big {
+      width: 100%;
+      height: 44px;
+      padding: 10px 38px 10px 16px;
+      border: 1px solid var(--border-light);
       border-radius: var(--radius-md);
-      font-size: 13px;
+      font-size: 14px;
       font-family: 'Inter', sans-serif;
       background: #f8fafc;
       color: var(--brand-darker);
       font-weight: 500;
+      transition: all 0.15s ease;
     }
-    .client-search-input:focus {
+    .client-search-input-big:focus {
       background: #ffffff;
       border-color: var(--brand-blue);
       outline: none;
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .client-search-input-big::placeholder {
+      color: #64748b;
+      font-weight: 400;
     }
 
-    .btn {
-      padding: 9px 14px;
-      border-radius: var(--radius-md);
+    .clear-search-btn {
+      position: absolute;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: #64748b;
+      width: 24px;
+      height: 24px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .clear-search-btn:hover { color: #0f172a; }
+
+    /* Вкладки листов — легкие текстовые переключатели без рамок */
+    .client-filter-tabs-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .sheet-tabs-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .sheet-tab-btn {
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
-      font-size: 12.5px;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-      font-family: 'Inter', sans-serif;
-      white-space: nowrap;
-      border: 1px solid transparent;
-    }
-
-    .btn-sync-row {
-      background: #eff6ff;
-      color: #1d4ed8;
-      border-color: #bfdbfe;
-      font-weight: 700;
-    }
-    .btn-sync-row:hover { background: #dbeafe; }
-
-    .btn-whatsapp {
-      background: #16a34a;
-      color: #ffffff;
-      border-color: #16a34a;
-    }
-    .btn-whatsapp:hover { background: #15803d; }
-
-    .btn-email {
-      background: #2563eb;
-      color: #ffffff;
-      border-color: #2563eb;
-    }
-    .btn-email:hover { background: #1d4ed8; }
-
-    .btn-pdf {
-      background: #ffffff;
-      color: #0f172a;
-      border-color: #cbd5e1;
-    }
-    .btn-pdf:hover { background: #f1f5f9; }
-
-    .btn-minimize {
-      background: #f1f5f9;
-      color: #1e293b;
-      border-color: #cbd5e1;
-      font-weight: 700;
-    }
-    .btn-minimize:hover { background: #e2e8f0; }
-
-    /* Карточка выбранного клиента + выбор конкретного ЛПР */
-    .active-client-card {
-      margin-top: 10px;
-      padding: 10px 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .chips-row {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .recipient-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      background: #eff6ff;
-      color: #1e40af;
-      border: 1px solid #bfdbfe;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .recipient-chip-del {
-      cursor: pointer;
+      border: none;
+      background: transparent;
       color: #64748b;
-      font-weight: 800;
-      margin-left: 2px;
+      transition: all 0.15s ease;
     }
-    .recipient-chip-del:hover { color: #ef4444; }
+    .sheet-tab-btn:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .sheet-tab-btn.active {
+      background: #eff6ff;
+      color: #2563eb;
+      font-weight: 700;
+    }
 
-    /* Таблетки выбора конкретного человека (ЛПР) внутри компании */
-    .lpr-selector-bar {
+    .batch-select-controls {
       display: flex;
       align-items: center;
+      gap: 8px;
       flex-wrap: wrap;
-      gap: 6px;
-      padding-top: 6px;
-      border-top: 1px dashed #cbd5e1;
     }
-    .lpr-label {
-      font-size: 11.5px;
+
+    /* Воздушный список клиентов без тяжелой рамки */
+    .client-directory-panel {
+      max-height: 240px;
+      overflow-y: auto;
+      margin-bottom: 14px;
+      border-top: 1px solid var(--border-soft);
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .client-dir-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .client-dir-row:last-child { border-bottom: none; }
+    .client-dir-row:hover { background-color: #f8fafc; }
+    .client-dir-row.is-checked {
+      background-color: #eff6ff;
+    }
+
+    .client-dir-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 240px;
+      overflow: hidden;
+    }
+
+    .client-dir-chk {
+      width: 16px;
+      height: 16px;
+      accent-color: #2563eb;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin: 0;
+    }
+
+    .client-dir-company {
+      font-size: 13.5px;
       font-weight: 700;
-      color: #475569;
-      margin-right: 4px;
+      color: #0f172a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 280px;
     }
-    .lpr-pill {
-      padding: 4px 10px;
+
+    .client-dir-sub {
+      font-size: 12px;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .client-dir-email {
+      font-size: 12px;
+      color: #334155;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 240px;
+    }
+    .client-dir-email.no-mail {
+      color: #94a3b8;
+    }
+
+    .client-dir-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
+    /* Воздушный список выбранных получателей без рамок-прямоугольников */
+    .selected-recipients-box {
+      padding: 8px 0 14px 0;
+    }
+
+    .selected-recipient-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 8px 0;
+      border-bottom: 1px dashed var(--border-light);
+    }
+    .selected-recipient-row:last-child { border-bottom: none; }
+
+    .sel-comp-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 180px;
+    }
+
+    .sel-comp-name {
+      font-weight: 700;
+      font-size: 13px;
+      color: #0f172a;
+    }
+
+    .sel-controls-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .mini-pills-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .mini-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #64748b;
+    }
+
+    .person-pill {
+      padding: 3px 10px;
       border-radius: 999px;
       font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
-      border: 1px solid #cbd5e1;
+      border: 1px solid #e2e8f0;
       background: #ffffff;
-      color: #334155;
-      transition: all 0.15s;
+      color: #475569;
+      user-select: none;
     }
-    .lpr-pill:hover { border-color: #2563eb; color: #2563eb; }
-    .lpr-pill.active {
-      background: #0f172a;
-      color: #ffffff;
-      border-color: #0f172a;
+    .person-pill:hover { border-color: #94a3b8; color: #0f172a; }
+    .person-pill.active {
+      background: #eff6ff;
+      color: #2563eb;
+      border-color: #bfdbfe;
+      font-weight: 700;
     }
 
-    /* Раскрывающаяся панель деталей Email */
-    .email-drawer {
-      display: none;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid #cbd5e1;
+    .email-pill {
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      color: #334155;
+      user-select: none;
+    }
+    .email-pill.off {
+      background: transparent;
+      color: #94a3b8;
+      border-color: transparent;
+      text-decoration: line-through;
+    }
+
+    .btn-remove-rec {
+      background: transparent;
+      color: #94a3b8;
+      border: none;
+      width: 24px;
+      height: 24px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+    .btn-remove-rec:hover { color: #dc2626; }
+
+    /* Панель комментария и ЕДИНСТВЕННЫХ кнопок отправки */
+    .send-action-Zone {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-top: 6px;
+    }
+
+    .comment-and-options-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
     }
 
     .email-textarea {
-      width: 100%;
-      padding: 8px 12px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      font-size: 12.5px;
+      flex: 1;
+      min-width: 260px;
+      padding: 9px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      font-size: 13px;
       font-family: 'Inter', sans-serif;
-      min-height: 44px;
+      height: 40px;
+      resize: vertical;
+      background: #f8fafc;
+    }
+    .email-textarea:focus {
       background: #ffffff;
+      border-color: var(--brand-blue);
+      outline: none;
     }
 
-    /* Выпадающий список клиентов */
-    .smart-dropdown-list {
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      max-height: 240px;
-      overflow-y: auto;
-      background: #ffffff;
-      border: 1px solid #94a3b8;
-      border-radius: 8px;
-      box-shadow: 0 12px 28px rgba(0,0,0,0.16);
-      z-index: 9999;
-      margin-top: 4px;
-    }
-    .smart-dropdown-item {
-      padding: 9px 14px;
-      cursor: pointer;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 12px;
+    .main-action-buttons-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-    .smart-dropdown-item:hover { background-color: #eff6ff; }
 
-    /* БЛОК 2: ПАНЕЛЬ ФИЛЬТРАЦИИ ТРУБ ПРЯМО НАД ТАБЛИЦЕЙ */
-    .pipe-filter-bar {
-      background: var(--bg-white);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-lg);
-      padding: 10px 16px;
-      margin-bottom: 14px;
+    .btn {
+      padding: 9px 16px;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Inter', sans-serif;
+      white-space: nowrap;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    .btn-primary-send {
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 700;
+      padding: 10px 20px;
+    }
+    .btn-primary-send:hover { background: #1d4ed8; }
+
+    .btn-whatsapp {
+      background: #16a34a;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .btn-whatsapp:hover { background: #15803d; }
+
+    .btn-draft {
+      background: transparent;
+      color: #475569;
+      border-color: #e2e8f0;
+    }
+    .btn-draft:hover { background: #f8fafc; color: #0f172a; }
+
+    .btn-pdf {
+      background: transparent;
+      color: #0f172a;
+      border-color: #cbd5e1;
+      font-weight: 600;
+    }
+    .btn-pdf:hover { background: #f8fafc; }
+
+    .btn-minimize {
+      background: #f8fafc;
+      color: #475569;
+      border-color: #e2e8f0;
+    }
+    .btn-minimize:hover { background: #f1f5f9; color: #0f172a; }
+
+    /* =================================================================
+       БЛОК 3: ВОЗДУШНАЯ ТАБЛИЦА ПРАЙСА (БЕЗ ПРЯМОУГОЛЬНИКОВ)
+       ================================================================= */
+    .in-price-sticky-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(6px);
+      padding: 14px 0;
+      margin-bottom: 8px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -271,11 +635,11 @@
     }
 
     .pipe-search-input {
-      width: 280px;
-      padding: 8px 12px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      font-size: 12.5px;
+      width: 270px;
+      padding: 8px 14px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      font-size: 13px;
       font-family: 'Inter', sans-serif;
       background: #f8fafc;
     }
@@ -291,275 +655,298 @@
       flex-wrap: wrap;
     }
     .grp-pill {
-      padding: 5px 11px;
-      border-radius: 6px;
-      font-size: 11.5px;
-      font-weight: 700;
+      padding: 6px 13px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
       cursor: pointer;
-      border: 1px solid #e2e8f0;
-      background: #f8fafc;
-      color: #475569;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      transition: all 0.15s ease;
     }
+    .grp-pill:hover { background: #f1f5f9; color: #0f172a; }
     .grp-pill.active {
-      background: #2563eb;
-      color: #ffffff;
-      border-color: #2563eb;
-    }
-
-    /* ДОКУМЕНТ ПРАЙСА */
-    .document-wrapper {
-      background: var(--bg-white);
-      max-width: 100%;
-      margin: 0 auto;
-      padding: 28px 36px;
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 8px 14px -3px rgba(0, 0, 0, 0.04);
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 2px solid var(--bg-app);
-      padding-bottom: 20px;
-      margin-bottom: 20px;
-    }
-    .company-brand {
-      color: var(--brand-darker);
-      font-size: 30px;
-      font-weight: 900;
-      letter-spacing: -1px;
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .doc-title {
-      color: var(--brand-blue);
-      font-size: 12px;
+      background: #eff6ff;
+      color: #2563eb;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
     }
-    .info-badge {
-      display: inline-flex;
-      align-items: center;
-      color: var(--text-muted);
-      font-size: 12px;
-      font-weight: 500;
-      background: var(--bg-app);
-      padding: 5px 10px;
-      border-radius: 6px;
-    }
-    .contact-card { text-align: right; }
-    .contact-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
-    .contact-name { font-size: 14px; color: var(--brand-dark); font-weight: 600; }
-    .contact-phone { font-size: 19px; color: var(--brand-blue); font-weight: 900; margin-top: 2px; }
 
     table { width: 100%; border-collapse: collapse; background-color: var(--bg-white); }
     thead tr th {
       position: sticky;
-      top: 0;
-      background: var(--bg-app);
-      color: var(--text-muted);
+      top: 62px;
+      background: #ffffff;
+      color: #64748b;
       font-size: 11px;
       text-transform: uppercase;
+      letter-spacing: 0.6px;
       font-weight: 700;
-      padding: 12px 10px;
+      padding: 14px 10px;
       text-align: left;
-      border-bottom: 1px solid var(--border-light);
-      border-top: 1px solid var(--border-light);
-      z-index: 10;
+      border-top: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
+      z-index: 20;
     }
 
     .category-header {
-      padding: 18px 10px 10px 10px;
-      border-bottom: 2px solid var(--border-light);
+      padding: 28px 10px 12px 10px;
+      border-bottom: 1px solid #e2e8f0;
       background: var(--bg-white);
     }
     .category-title {
-      color: var(--brand-darker);
-      font-size: 14px;
+      color: #0f172a;
+      font-size: 16px;
       font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
+      letter-spacing: -0.3px;
     }
 
-    tr.data-row { border-bottom: 1px solid var(--bg-app); }
+    tr.data-row { border-bottom: 1px solid #f1f5f9; transition: background 0.12s ease; }
     tr.data-row:hover td { background-color: var(--bg-row-hover); }
     tr.data-row.row-selected td { background-color: var(--bg-row-selected) !important; }
-    tr.data-row td { padding: 10px 10px; font-size: 13px; vertical-align: middle; }
+    tr.data-row td { padding: 14px 10px; font-size: 14px; vertical-align: middle; }
 
-    .col-name { font-weight: 600; color: var(--brand-dark); }
-    .col-center { text-align: center; }
-    .col-price-m { font-weight: 500; color: var(--text-muted); text-align: right; white-space: nowrap; }
-    .col-price-tn { font-weight: 700; color: var(--brand-darker); text-align: right; font-size: 14px; white-space: nowrap; }
+    .col-name { font-weight: 600; color: #0f172a; cursor: pointer; }
+    .col-center { text-align: center; color: #334155; }
+    .col-price-m { font-weight: 500; color: #64748b; text-align: right; white-space: nowrap; font-size: 13.5px; }
+    .col-price-tn { font-weight: 800; color: #0f172a; text-align: right; font-size: 15px; white-space: nowrap; }
 
-    .stock-stack { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.2; }
-    .stock-tn { font-size: 13px; font-weight: 700; color: var(--brand-darker); }
-    .stock-m { font-size: 11px; font-weight: 500; color: var(--text-muted); margin-top: 2px; }
-    .stock-badge-simple { font-weight: 600; color: var(--success); font-size: 12px; background: #dcfce7; padding: 2px 8px; border-radius: 12px; }
+    .stock-stack { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.3; }
+    .stock-tn { font-size: 14px; font-weight: 800; color: #0f172a; }
+    .stock-m { font-size: 12px; font-weight: 500; color: #64748b; margin-top: 2px; }
+    .stock-badge-simple { font-weight: 600; color: var(--success); font-size: 12.5px; }
 
-    .tag-category { padding: 3px 7px; background: var(--bg-app); border: 1px solid var(--border-light); border-radius: 6px; font-size: 11px; font-weight: 600; }
-    .tag-gost { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    /* Чистый текст группы без прямоугольной рамки */
+    .tag-category {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .tag-gost { font-size: 13px; color: #64748b; line-height: 1.35; }
 
     .btn-row-copy {
-      background: var(--bg-white);
-      border: 1px solid var(--border-light);
-      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid #e2e8f0;
+      color: #64748b;
       border-radius: 6px;
       padding: 5px 10px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 600;
     }
     .btn-row-copy:hover { background: var(--bg-row-selected); color: var(--brand-blue); border-color: #bfdbfe; }
 
-    .custom-chk { width: 17px; height: 17px; cursor: pointer; accent-color: var(--brand-blue); margin: 0; }
+    .custom-chk { width: 16px; height: 16px; cursor: pointer; accent-color: var(--brand-blue); margin: 0; }
 
     .footer-note {
-      margin-top: 28px;
-      padding-top: 18px;
+      margin-top: 32px;
+      padding-top: 20px;
       border-top: 1px solid var(--border-light);
-      font-size: 12px;
+      font-size: 12.5px;
       color: var(--text-muted);
       display: flex;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      line-height: 1.6;
     }
 
-    @page { margin: 0 !important; }
+    @page { margin: 12mm 12mm !important; }
     @media print {
       body, html { padding: 0 !important; margin: 0 !important; background: #fff !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      .no-print, .col-actions, .col-chk { display: none !important; }
-      .document-wrapper { box-shadow: none !important; padding: 10mm 8mm !important; border: none !important; }
+      .no-print, .col-actions, .col-chk, .in-price-sticky-toolbar, .send-dispatch-center, #minimizedRestoreBar { display: none !important; }
+      .document-wrapper { padding: 0 !important; border: none !important; box-shadow: none !important; }
+      thead tr th { position: static !important; }
     }
   </style>
 </head>
 <body>
 
-  <!-- БЛОК 1: ВЕРХНИЙ ПУЛЬТ КЛИЕНТА, ВЫБОРА ЛПР И ОТПРАВКИ -->
-  <div class="client-command-bar no-print" id="mainControlBar">
-    <div class="top-bar-row">
-      <div class="client-selector-wrap">
-        <button type="button" class="btn btn-sync-row" id="btnSyncActiveRow" onclick="syncClientFromActiveSheetRow()" title="Подтянуть клиента, на строке которого сейчас стоит курсор в Таблице">
-          🎯 С текущей строки
-        </button>
+  <div id="toastBanner" class="toast-banner"></div>
 
-        <div style="position:relative; flex:1;">
-          <input type="text" id="smartInput" class="client-search-input"
-                 placeholder="🏢 Клиент из базы (название, ИНН, имя) или введите Email и нажмите Enter..."
-                 oninput="onSmartInput(this.value)"
-                 onkeydown="onSmartKeyDown(event)"
-                 onfocus="onSmartInput(this.value)"
-                 autocomplete="off">
-          <div id="smartDropdown" class="smart-dropdown-list"></div>
-        </div>
-      </div>
-
-      <div style="display:flex; gap:8px; align-items:center;">
-        <button type="button" class="btn btn-whatsapp" id="btnCopyText" onclick="copySelectedOrVisible()">
-          💬 <span id="btnCopyLabel">В Мессенджер (+Лог)</span>
-        </button>
-
-        <button type="button" class="btn btn-email" id="btnOpenEmail" onclick="toggleEmailDrawer()">
-          📧 На Email (+PDF)
-        </button>
-
-        <button type="button" class="btn btn-pdf" id="btnPrintDoc" onclick="printFullOrSelectedWithLog()" title="Сохранить в PDF и автоматически записать в Историю клиента">
-          📄 Скачать PDF (+Лог)
-        </button>
-
-        <button type="button" class="btn btn-minimize" id="btnToggleMinimize" onclick="toggleMinimizeWindow()">
-          <span id="minIcon">➖</span> <span id="minText">Свернуть</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Карточка выбранного клиента + переключатель конкретного имени ЛПР -->
-    <div class="active-client-card" id="activeClientCard">
-      <div class="chips-row" id="recipientChipsWrap">
-        <span style="color:#64748b; font-size:12px;">Клиент не выбран — нажмите <strong>«🎯 С текущей строки»</strong> или выберите компанию в поиске выше.</span>
-      </div>
-
-      <!-- Панель выбора конкретного ЛПР (появляется, когда у клиента 1 или несколько человек в колонке D) -->
-      <div class="lpr-selector-bar" id="lprSelectorBar" style="display:none;">
-        <span class="lpr-label">👤 На чье имя обращаться (в письме / WhatsApp / логе):</span>
-        <div id="lprPillsContainer" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
-      </div>
-
-      <!-- Раскрывающаяся панель отправки Email -->
-      <div class="email-drawer" id="emailDrawer">
-        <div style="margin-bottom:8px;">
-          <label style="font-size:11.5px; font-weight:700; color:#0f172a; display:block; margin-bottom:4px;">
-            💬 Комментарий / условия поставки (вставится в шапку письма и в WhatsApp):
-          </label>
-          <textarea id="inputCustomComment" class="email-textarea" placeholder="Например: Труба 530х8 возможна с доставкой до вашей базы в Воронеже. Отгрузка по теоретическому весу."></textarea>
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-            <span id="emailItemsInfo" style="font-size:12px; font-weight:700; color:#1e40af;">
-              В теле письма: Весь прайс (с разделением Новые / Лежалые / Восст. / Б/у)
-            </span>
-            <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:#0f172a; cursor:pointer;">
-              <input type="checkbox" id="chkAttachFullPdf" checked style="width:15px; height:15px; accent-color:#2563eb;">
-              📎 Всегда прикреплять PDF полного прайса
-            </label>
-          </div>
-
-          <div style="display:flex; gap:8px;">
-            <button type="button" class="btn" style="background:#ffffff; color:#334155; border-color:#cbd5e1;" onclick="executeSendProposal(true)">
-              📝 В черновики
-            </button>
-            <button type="button" class="btn btn-whatsapp" id="btnSendProposal" onclick="executeSendProposal(false)">
-              🚀 Отправить письмо (+PDF и Лог)
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+  <!-- Компактная панель в свернутом режиме -->
+  <div id="minimizedRestoreBar" class="no-print">
+    <button type="button" class="btn-restore-full" onclick="toggleMinimizeWindow()">
+      Развернуть прайс-лист
+    </button>
   </div>
 
-  <!-- БЛОК 2: ПАНЕЛЬ ФИЛЬТРАЦИИ ТРУБ НЕПОСРЕДСТВЕННО НАД ТАБЛИЦЕЙ -->
-  <div class="pipe-filter-bar no-print" id="pipeFilterBar">
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-      <input type="text" id="filterInput" class="pipe-search-input" placeholder="🔍 Фильтр труб: 530, 273х8, газ, ГОСТ..." onkeyup="filterPipes()">
+  <!-- Надежное хранилище данных от Google Apps Script через data-атрибуты -->
+  <div id="gasServerState"
+       data-clients="<?= typeof clientsJson !== 'undefined' ? clientsJson : '' ?>"
+       data-prefill="<?= typeof prefillClientKey !== 'undefined' ? prefillClientKey : '' ?>"
+       data-date="<?= typeof generatedDate !== 'undefined' ? generatedDate : '' ?>"
+       style="display:none;"></div>
 
-      <div class="group-filter-pills">
-        <span class="grp-pill active" data-grp="ALL" onclick="setGroupFilter('ALL', this)">Все группы</span>
-        <span class="grp-pill" data-grp="Трубы новые" onclick="setGroupFilter('Трубы новые', this)">Новые</span>
-        <span class="grp-pill" data-grp="Трубы лежалые" onclick="setGroupFilter('Трубы лежалые', this)">Лежалые</span>
-        <span class="grp-pill" data-grp="Трубы восстановленные" onclick="setGroupFilter('Трубы восстановленные', this)">Восстановленные</span>
-        <span class="grp-pill" data-grp="Трубы б/у" onclick="setGroupFilter('Трубы б/у', this)">Б/у</span>
-      </div>
-    </div>
-
-    <div style="display:flex; align-items:center; gap:10px;">
-      <span id="selectedPipesBadge" style="font-size:12px; font-weight:700; color:#475569;">
-        Отмечено галочками: 0 (отправится весь видимый список)
-      </span>
-      <button type="button" class="btn" id="btnClear" style="display:none; background:#fee2e2; color:#991b1b; padding:5px 10px; font-size:11.5px;" onclick="clearSelection()">
-        ✕ Снять галочки
-      </button>
-    </div>
-  </div>
-
-  <!-- ДОКУМЕНТ ПРАЙС-ЛИСТА -->
   <div class="document-wrapper" id="documentWrapper">
-    <div class="header">
-      <div>
-        <div class="doc-title">Складская справка: трубный металлопрокат</div>
+
+    <!-- =================================================================
+         БЛОК 1 (ВЕРХ): ШАПКА «СКЛАДСКАЯ СПРАВКА: ТРУБНЫЙ МЕТАЛЛОПРОКАТ»
+         ================================================================= -->
+    <div class="top-warehouse-header" id="topWarehouseHeader">
+      <div class="brand-left">
+        <div class="doc-title">СКЛАДСКАЯ СПРАВКА: ТРУБНЫЙ МЕТАЛЛОПРОКАТ</div>
         <div class="company-brand">КАПИТАЛ-ПЛЮС</div>
         <div class="info-badge">
-          Актуально на: <?= generatedDate ?> &nbsp;|&nbsp; База: г. Воронеж
+          <span>Актуально на: <strong id="headerDateText" style="color:#0f172a;"><?= generatedDate ?></strong></span>
+          <span style="color:#cbd5e1;">|</span>
+          <span>База: <strong style="color:#0f172a;">г. Воронеж</strong></span>
+          <span style="color:#cbd5e1;">|</span>
+          <span>Цены с НДС 22%</span>
         </div>
       </div>
-      <div>
+
+      <div class="header-right-wrap">
         <div class="contact-card">
-          <div class="contact-label">Отдел продаж</div>
-          <div class="contact-name">Кирилл Манюхин</div>
+          <div class="contact-label">ОТДЕЛ ПРОДАЖ</div>
+          <div class="contact-name">Кирилл</div>
           <div class="contact-phone">8 (906) 588-37-77</div>
         </div>
+
+        <button type="button" class="btn btn-minimize no-print" id="btnToggleMinimize" onclick="toggleMinimizeWindow()">
+          <span id="minText">Свернуть окно</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- =================================================================
+         БЛОК 2 (ЦЕНТР): ВОЗДУШНЫЙ ПУЛЬТ ВЫБОРА КЛИЕНТОВ И ОТПРАВКИ КП
+         ================================================================= -->
+    <div class="send-dispatch-center no-print" id="sendDispatchCenter">
+      <div class="dispatch-header-row">
+        <div class="dispatch-title">
+          <span>Получатели КП и рассылка</span>
+          <span class="dispatch-count-pill" id="selectedClientsCounterPill">Выбрано: 0</span>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" class="btn btn-sm btn-draft" id="btnToggleDirectory" onclick="toggleDirectoryPanel()">
+            <span id="dirToggleLabel">Скрыть список клиентов</span>
+          </button>
+          <button type="button" class="btn btn-sm btn-draft" onclick="syncClientFromActiveSheetRow(true)" title="Перечитать список клиентов из таблицы">
+            Обновить базу
+          </button>
+        </div>
+      </div>
+
+      <!-- Поиск клиентов -->
+      <div class="client-search-box-wrap">
+        <div class="client-search-field-container">
+          <input type="text" id="smartInput" class="client-search-input-big"
+                 placeholder="Поиск по базе: компания, имя ЛПР, ИНН, город, диаметр (530, 219) или введите Email..."
+                 oninput="onClientSearchInput()"
+                 onkeydown="onSmartKeyDown(event)"
+                 autocomplete="off">
+          <button type="button" id="btnClearClientSearch" class="clear-search-btn" onclick="clearClientSearch()" title="Очистить">✕</button>
+        </div>
+
+        <button type="button" class="btn btn-draft" onclick="addManualEmailFromInput()">
+          + Добавить Email
+        </button>
+      </div>
+
+      <!-- Вкладки по листам -->
+      <div class="client-filter-tabs-row">
+        <div class="sheet-tabs-group">
+          <button type="button" class="sheet-tab-btn active" data-sheet="ALL" onclick="setClientSheetTab('ALL', this)">
+            Все <span id="cntAll"></span>
+          </button>
+          <button type="button" class="sheet-tab-btn" data-sheet="3. Лист ожидания" onclick="setClientSheetTab('3. Лист ожидания', this)">
+            Лист ожидания <span id="cntWait"></span>
+          </button>
+          <button type="button" class="sheet-tab-btn" data-sheet="2. Золотой список (Киты)" onclick="setClientSheetTab('2. Золотой список (Киты)', this)">
+            Киты <span id="cntWhale"></span>
+          </button>
+          <button type="button" class="sheet-tab-btn" data-sheet="1. Обзвон (База)" onclick="setClientSheetTab('1. Обзвон (База)', this)">
+            Обзвон <span id="cntCold"></span>
+          </button>
+
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#475569; margin-left:10px; cursor:pointer; user-select:none;">
+            <input type="checkbox" id="chkOnlyWithEmail" onchange="renderClientDirectory()" style="width:15px; height:15px; accent-color:#2563eb;">
+            Только с Email
+          </label>
+        </div>
+
+        <div class="batch-select-controls">
+          <button type="button" class="btn btn-sm btn-draft" onclick="selectAllFilteredClientsWithEmail()">
+            Выбрать все в списке (с Email)
+          </button>
+          <button type="button" class="btn btn-sm btn-draft" onclick="clearAllRecipients()">
+            Сбросить выбор
+          </button>
+        </div>
+      </div>
+
+      <!-- Список клиентов -->
+      <div class="client-directory-panel" id="clientDirectoryPanel"></div>
+
+      <!-- Выбранные получатели -->
+      <div class="selected-recipients-box" id="selectedRecipientsBox" style="display:none;">
+        <div id="recipientChipsWrap"></div>
+      </div>
+
+      <!-- Комментарий и ЕДИНСТВЕННЫЙ блок кнопок отправки -->
+      <div class="send-action-Zone">
+        <div class="comment-and-options-row">
+          <textarea id="inputCustomComment" class="email-textarea" placeholder="Комментарий / условия поставки (необязательно — добавится в письмо и мессенджер)..."></textarea>
+
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#334155; cursor:pointer; white-space:nowrap;">
+            <input type="checkbox" id="chkAttachFullPdf" checked style="width:15px; height:15px; accent-color:#2563eb;">
+            Вложить PDF полного прайса
+          </label>
+        </div>
+
+        <div class="main-action-buttons-row">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary-send" id="btnSendProposal" onclick="executeSendProposal(false)">
+              <span id="btnSendEmailLabel">Отправить на Email (+PDF)</span>
+            </button>
+
+            <button type="button" class="btn btn-draft" id="btnDraftProposal" onclick="executeSendProposal(true)">
+              В черновики
+            </button>
+
+            <span id="emailItemsInfo" style="font-size:12px; color:#64748b; margin-left:4px;">
+              В письме: весь прайс + PDF
+            </span>
+          </div>
+
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-whatsapp" id="btnCopyText" onclick="copySelectedOrVisible()">
+              <span id="btnCopyLabel">Скопировать для мессенджера</span>
+            </button>
+
+            <button type="button" class="btn btn-pdf" id="btnPrintDoc" onclick="printFullOrSelectedWithLog()">
+              Скачать / Печать PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- =================================================================
+         БЛОК 3: ВОЗДУШНАЯ ТАБЛИЦА ПРАЙС-ЛИСТА (БЕЗ ПРЯМОУГОЛЬНИКОВ)
+         ================================================================= -->
+    <div class="in-price-sticky-toolbar no-print" id="pipeFilterBar">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <input type="text" id="filterInput" class="pipe-search-input" placeholder="Фильтр по трубам: 530, 273х8, ГОСТ..." oninput="filterPipes()">
+
+        <div class="group-filter-pills">
+          <span class="grp-pill active" data-grp="ALL" onclick="setGroupFilter('ALL', this)">Все группы</span>
+          <span class="grp-pill" data-grp="Трубы новые" onclick="setGroupFilter('Трубы новые', this)">Трубы новые</span>
+          <span class="grp-pill" data-grp="Трубы лежалые" onclick="setGroupFilter('Трубы лежалые', this)">Трубы лежалые</span>
+          <span class="grp-pill" data-grp="Трубы восстановленные" onclick="setGroupFilter('Трубы восстановленные', this)">Трубы восстановленные</span>
+          <span class="grp-pill" data-grp="Трубы б/у" onclick="setGroupFilter('Трубы б/у', this)">Трубы б/у</span>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span id="selectedPipesBadge" style="font-size:12.5px; font-weight:600; color:#64748b;">
+          Выбрано позиций: 0 (весь список)
+        </span>
+        <button type="button" class="btn btn-sm btn-draft" id="btnClear" style="display:none;" onclick="clearSelection()">
+          Снять галочки
+        </button>
       </div>
     </div>
 
@@ -568,24 +955,24 @@
         <thead>
           <tr>
             <th class="col-chk" style="width: 4%; text-align: center;">
-              <input type="checkbox" class="custom-chk" id="checkAll" onchange="toggleSelectAll(this)" title="Выбрать все видимые">
+              <input type="checkbox" class="custom-chk" id="checkAll" onchange="toggleSelectAll(this)" title="Выбрать все видимые позиции">
             </th>
-            <th style="width: 9%;">Группа</th>
-            <th style="width: 25%;">Наименование профиля</th>
-            <th style="width: 7%; text-align: center;">Ø (мм)</th>
-            <th style="width: 7%; text-align: center;">Стенка</th>
-            <th style="width: 12%; text-align: center;">ГОСТ / Сталь</th>
-            <th style="width: 12%; text-align: center;">Остаток</th>
-            <th style="width: 9%; text-align: right;">Цена / м</th>
-            <th style="width: 10%; text-align: right;">Цена / тн</th>
-            <th class="col-actions" style="width: 5%; text-align: center;">В чат</th>
+            <th style="width: 9%;">ГРУППА</th>
+            <th style="width: 25%;">НАИМЕНОВАНИЕ ПРОФИЛЯ</th>
+            <th style="width: 7%; text-align: center;">Ø (ММ)</th>
+            <th style="width: 7%; text-align: center;">СТЕНКА</th>
+            <th style="width: 13%; text-align: center;">ГОСТ / СТАЛЬ</th>
+            <th style="width: 12%; text-align: center;">ОСТАТОК</th>
+            <th style="width: 9%; text-align: right;">ЦЕНА / М</th>
+            <th style="width: 9%; text-align: right;">ЦЕНА / ТН</th>
+            <th class="col-actions" style="width: 5%; text-align: center;">КОПИЯ</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="priceTableBody">
           <? for (var grp in groupedData) { ?>
             <tr class="header-group-row" data-group="<?= grp ?>">
               <td colspan="10" class="category-header">
-                <span class="category-title">▪ <?= grp ?></span>
+                <span class="category-title"><?= grp ?></span>
               </td>
             </tr>
             <? for (var i = 0; i < groupedData[grp].length; i++) { 
@@ -595,7 +982,7 @@
                   <input type="checkbox" class="custom-chk row-chk" onchange="updateRowSelection(this)">
                 </td>
                 <td><span class="tag-category"><?= item.category ?></span></td>
-                <td class="col-name"><?= item.name ?></td>
+                <td class="col-name" onclick="toggleRowCheckboxByName(this)"><?= item.name ?></td>
                 <td class="col-center"><?= item.diam ?></td>
                 <td class="col-center"><?= item.wall ?></td>
                 <td class="col-center"><span class="tag-gost"><?= item.std ?></span></td>
@@ -609,7 +996,7 @@
                 <td class="col-price-m"><?= item.priceM ?></td>
                 <td class="col-price-tn"><?= item.priceTn ?></td>
                 <td class="col-actions" style="text-align: center;">
-                  <button type="button" class="btn-row-copy" onclick="copySingleRow(this)" title="Скопировать эту трубу в WhatsApp/TG и записать в Историю">
+                  <button type="button" class="btn-row-copy" onclick="copySingleRow(this)">
                     Копия
                   </button>
                 </td>
@@ -622,254 +1009,617 @@
 
     <div class="footer-note">
       <div>
-        <strong>ООО «Капитал-Плюс»</strong><br>
-        📍 Складская база: г. Воронеж (погрузка в открытый транспорт)
+        <strong style="color:#0f172a;">ООО «Капитал-Плюс»</strong><br>
+        Складская база: г. Воронеж &nbsp;|&nbsp; Металл в наличии на складе. Помощь с автодоставкой по РФ.
       </div>
       <div style="text-align: right;">
-        Цены указаны с учетом НДС.<br>
-        По вопросам резервирования: <strong>8 (906) 588-37-77</strong>
+        Цены указаны с учетом НДС 22%.<br>
+        По вопросам резервирования: <strong style="color:#0f172a;">8 (906) 588-37-77</strong>
       </div>
     </div>
   </div>
 
   <script>
-    var rawClientsFromSheet = [];
-    try {
-      var serverData = <?= JSON.stringify(clientsJson || '[]') ?>;
-      var parsedData = JSON.parse(serverData);
-      rawClientsFromSheet = (typeof parsedData === 'string') ? JSON.parse(parsedData) : parsedData;
-    } catch (e) {
-      rawClientsFromSheet = [];
-    }
+    var FALLBACK_CLIENTS_PREVIEW = [
+      { key: "3. Лист ожидания_2", sheet: "3. Лист ожидания", row: 2, inn: "4629045050", company: "АО \"КОРПОРАЦИЯ \"ГРИНН\"", city: "г. Брянск", lpr: "Царьков Александр Фёдорович", lprList: ["Царьков Александр Фёдорович"], phone: "+7 (910) 740-11-52", emailStr: "Zarkov.AF@grinn-corp.ru", emailList: ["Zarkov.AF@grinn-corp.ru"], sphere: "Строительство", need: "", diams: [] },
+      { key: "3. Лист ожидания_3", sheet: "3. Лист ожидания", row: 3, inn: "3604082795", company: "ООО \"КВАДРО\"", city: "г. Борисоглебск", lpr: "Виталий Калинин", lprList: ["Виталий Калинин"], phone: "+7 (908) 137-12-22", emailStr: "kvadro_isk@mail.ru", emailList: ["kvadro_isk@mail.ru"], sphere: "Строительство (ПГС)", need: "", diams: [] },
+      { key: "3. Лист ожидания_4", sheet: "3. Лист ожидания", row: 4, inn: "3612006090", company: "ООО \"КАНТЕМИРОВСКОЕ ДРСУ\"", city: "г. Богучар", lpr: "Алексей Николаевич / Артём", lprList: ["Алексей Николаевич", "Артём"], phone: "+7 (960) 127-00-36", emailStr: "kdrsu36@mail.ru, yancen_artem@mail.ru, sea@dorsu.ru, info@dorsu.ru", emailList: ["kdrsu36@mail.ru", "yancen_artem@mail.ru", "sea@dorsu.ru", "info@dorsu.ru"], sphere: "Дорожное / Мостостроение", need: "", diams: [] },
+      { key: "3. Лист ожидания_5", sheet: "3. Лист ожидания", row: 5, inn: "", company: "Буровые технологии", city: "г. Липецк", lpr: "Евгений Николаевич", lprList: ["Евгений Николаевич"], phone: "+7 (910) 742-78-68", emailStr: "info@bur48.ru", emailList: ["info@bur48.ru"], sphere: "Бурение / ГНБ", need: "", diams: [] },
+      { key: "3. Лист ожидания_6", sheet: "3. Лист ожидания", row: 6, inn: "3420002239", company: "ООО \"КХ АРЬЕВА А.В.\"", city: "Волгоградская обл.", lpr: "Алексей Владимирович", lprList: ["Алексей Владимирович"], phone: "+7 (937) 741-44-67", emailStr: "vika.24.12@yandex.ru", emailList: ["vika.24.12@yandex.ru"], sphere: "", need: "", diams: [] },
+      { key: "3. Лист ожидания_7", sheet: "3. Лист ожидания", row: 7, inn: "7703202525", company: "ООО \"ГРИПОС\"", city: "г. Москва", lpr: "Александр Александрович / Заур", lprList: ["Александр Александрович", "Заур"], phone: "+7 (909) 907-10-55", emailStr: "gripos@yandex.ru", emailList: ["gripos@yandex.ru"], sphere: "Строительство", need: "", diams: [] },
+      { key: "2. Золотой список (Киты)_2", sheet: "2. Золотой список (Киты)", row: 2, inn: "3123174732", company: "ООО \"АККРЕДИТИВ\"", city: "г. Белгород", lpr: "Илья / Сергей Николаевич", lprList: ["Илья", "Сергей Николаевич"], phone: "+7 (910) 321-93-83", emailStr: "btk31@bk.ru, mail@sb31.ru", emailList: ["btk31@bk.ru", "mail@sb31.ru"], sphere: "Бурение / ГНБ", need: "", diams: [168, 219, 273, 325, 426, 530] },
+      { key: "2. Золотой список (Киты)_3", sheet: "2. Золотой список (Киты)", row: 3, inn: "2372022625", company: "ООО \"КУБАНЬ СТРОЙ МОНТАЖ\"", city: "Краснодарский край", lpr: "Игорь", lprList: ["Игорь"], phone: "+7 (967) 665-51-65", emailStr: "karpov.i.a@bk.ru", emailList: ["karpov.i.a@bk.ru"], sphere: "Конструкции / Опоры", need: "", diams: [325, 426, 530, 630, 720, 820] },
+      { key: "2. Золотой список (Киты)_4", sheet: "2. Золотой список (Киты)", row: 4, inn: "3661047395", company: "ООО \"БУРСЕРВИС\"", city: "г. Воронеж", lpr: "Сергей Данковцев", lprList: ["Сергей Данковцев"], phone: "+7 (920) 223-85-55", emailStr: "dankovtseva.elena@yandex.ru", emailList: ["dankovtseva.elena@yandex.ru"], sphere: "Бурение / ГНБ", need: "", diams: [] },
+      { key: "1. Обзвон (База)_5", sheet: "1. Обзвон (База)", row: 5, inn: "3663120481", company: "ООО \"РЭС-36\"", city: "г. Воронеж", lpr: "Тимур / Артём / Александр", lprList: ["Тимур", "Артём", "Александр"], phone: "+7 (920) 225-34-82", emailStr: "timur.vrn@list.ru, info@res-36.ru", emailList: ["timur.vrn@list.ru", "info@res-36.ru"], sphere: "", need: "", diams: [] }
+    ];
 
-    var prefillKey = "<?= prefillClientKey || '' ?>";
-    var recipientStore = {};
-    var currentGroupFilter = "ALL";
-
-    window.onload = function() {
-      if (prefillKey && rawClientsFromSheet.length > 0) {
-        var found = rawClientsFromSheet.find(function(c) { return c.key === prefillKey; });
-        if (found) addCompanyRecipient(found, true);
-      }
-      renderRecipientChips();
+    var FALLBACK_PIPES_PREVIEW = {
+      "Трубы новые": [
+        { category: "ЭСВ", name: "Труба 168х8", condition: "Новая", diam: "168", wall: "8", std: "ГОСТ 10704-91", stockTnStr: "6.636 тн", stockMStr: "210.2 м", stockText: "6.636 тн / 210.2 м", priceM: "2 147 ₽", priceTn: "68 000 ₽" },
+        { category: "ЭСВ", name: "Труба 219х6", condition: "Новая", diam: "219", wall: "6", std: "ГОСТ 10704-91", stockTnStr: "10.462 тн", stockMStr: "331.9 м", stockText: "10.462 тн / 331.9 м", priceM: "2 143 ₽", priceTn: "68 000 ₽" },
+        { category: "ЭСВ", name: "Труба 219х7", condition: "Новая", diam: "219", wall: "7", std: "ГОСТ 10704-91", stockTnStr: "14.327 тн", stockMStr: "391.5 м", stockText: "14.327 тн / 391.5 м", priceM: "2 489 ₽", priceTn: "68 000 ₽" },
+        { category: "ЭСВ", name: "Труба 273х8", condition: "Новая", diam: "273", wall: "8", std: "ГОСТ 10704-91", stockTnStr: "18.555 тн", stockMStr: "354.9 м", stockText: "18.555 тн / 354.9 м", priceM: "3 607 ₽", priceTn: "69 000 ₽" },
+        { category: "ЭСВ", name: "Труба 325х8", condition: "Новая", diam: "325", wall: "8", std: "ГОСТ 10704-91", stockTnStr: "19.875 тн", stockMStr: "317.8 м", stockText: "19.875 тн / 317.8 м", priceM: "4 378 ₽", priceTn: "70 000 ₽" },
+        { category: "ЭСВ", name: "Труба 426х9", condition: "Новая", diam: "426", wall: "9", std: "ГОСТ 10704-91", stockTnStr: "25.235 тн", stockMStr: "272.6 м", stockText: "25.235 тн / 272.6 м", priceM: "6 849 ₽", priceTn: "74 000 ₽" }
+      ],
+      "Трубы лежалые": [
+        { category: "ЭСВ", name: "Труба 159х6", condition: "Лежалая", diam: "159", wall: "6", std: "Металл", stockTnStr: "0.264 тн", stockMStr: "11.7 м", stockText: "0.264 тн / 11.7 м", priceM: "1 358 ₽", priceTn: "60 000 ₽" },
+        { category: "Бесшовная", name: "Труба 325х10", condition: "Лежалая", diam: "325", wall: "10", std: "Металл", stockTnStr: "1.253 тн", stockMStr: "16.1 м", stockText: "1.253 тн / 16.1 м", priceM: "4 661 ₽", priceTn: "60 000 ₽" },
+        { category: "ЭСВ", name: "Труба 377х9", condition: "Лежалая", diam: "377", wall: "9", std: "ГОСТ 10704-91", stockTnStr: "1.964 тн", stockMStr: "24 м", stockText: "1.964 тн / 24 м", priceM: "5 554 ₽", priceTn: "68 000 ₽" }
+      ],
+      "Трубы восстановленные": [
+        { category: "ЭСВ", name: "Труба 219х8", condition: "Восстановленная", diam: "219", wall: "8", std: "Газ", stockTnStr: "2.478 тн", stockMStr: "59.5 м", stockText: "2.478 тн / 59.5 м", priceM: "2 498 ₽", priceTn: "60 000 ₽" },
+        { category: "ЭСВ", name: "Труба 530х6", condition: "Восстановленная", diam: "530", wall: "6", std: "Газ", stockTnStr: "3.1 тн", stockMStr: "40 м", stockText: "3.1 тн / 40 м", priceM: "4 264 ₽", priceTn: "55 000 ₽" },
+        { category: "ЭСВ", name: "Труба 530х8", condition: "Восстановленная", diam: "530", wall: "8", std: "Газ", stockTnStr: "1.03 тн", stockMStr: "10 м", stockText: "1.03 тн / 10 м", priceM: "6 179 ₽", priceTn: "60 000 ₽" }
+      ],
+      "Трубы б/у": [
+        { category: "НКТ", name: "Труба 73х5.5", condition: "Б/у", diam: "73", wall: "5.5", std: "Нефть", stockTnStr: "1.88 тн", stockMStr: "205.3 м", stockText: "1.88 тн / 205.3 м", priceM: "458 ₽", priceTn: "50 000 ₽" },
+        { category: "НКТ", name: "Труба 89х6.5", condition: "Б/у", diam: "89", wall: "6.5", std: "Нефть", stockTnStr: "6.216 тн", stockMStr: "470 м", stockText: "6.216 тн / 470 м", priceM: "727 ₽", priceTn: "55 000 ₽" },
+        { category: "ЭСВ", name: "Труба 273х7", condition: "Б/у", diam: "273", wall: "7", std: "Нефть", stockTnStr: "21.252 тн", stockMStr: "462.8 м", stockText: "21.252 тн / 462.8 м", priceM: "2 526 ₽", priceTn: "55 000 ₽" }
+      ]
     };
 
-    // Живой подхват текущей выделенной строки из таблицы в любой момент (даже если окно уже было открыто!)
-    function syncClientFromActiveSheetRow() {
-      var btn = document.getElementById("btnSyncActiveRow");
-      var origText = btn.innerText;
-      btn.innerText = "⏳ Читаю строку...";
-      google.script.run
-        .withSuccessHandler(function(res) {
-          btn.innerText = origText;
-          if (res && res.clients) {
-            rawClientsFromSheet = res.clients;
-          }
-          if (res && res.activeKey) {
-            var found = rawClientsFromSheet.find(function(c) { return c.key === res.activeKey; });
-            if (found) {
-              recipientStore = {}; // Переключаемся на свежевыбранного клиента
-              addCompanyRecipient(found, true);
-              return;
-            }
-          }
-          alert("В таблице сейчас не выделена строка с клиентом (встаньте курсором на нужную строку в Обзвоне, Ожидании или Китах и нажмите кнопку снова).");
-        })
-        .withFailureHandler(function() {
-          btn.innerText = origText;
-        })
-        .getActiveClientFromSheetLive();
+    var rawClientsFromSheet = [];
+    var prefillKey = "";
+    var recipientStore = {};
+    var currentGroupFilter = "ALL";
+    var currentClientSheetTab = "ALL";
+    var isDirectoryOpen = true;
+    var toastTimer = null;
+
+    function showToast(msg, type) {
+      var el = document.getElementById("toastBanner");
+      if (!el) return;
+      el.className = "toast-banner " + (type ? "toast-" + type : "");
+      el.innerText = msg;
+      el.style.display = "block";
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() {
+        el.style.display = "none";
+      }, 3800);
     }
 
-    document.addEventListener("click", function(e) {
-      var dd = document.getElementById("smartDropdown");
-      var inp = document.getElementById("smartInput");
-      if (dd && e.target !== dd && e.target !== inp) {
-        dd.style.display = "none";
+    function copyToClipboardSafe(text, onSuccess) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
+          fallbackCopyText(text, onSuccess);
+        });
+      } else {
+        fallbackCopyText(text, onSuccess);
       }
-    });
-
-    function onSmartInput(val) {
-      var q = (val || '').toLowerCase().trim();
-      if (!q) {
-        renderDropdownList(rawClientsFromSheet.slice(0, 25));
-        return;
-      }
-      var matches = rawClientsFromSheet.filter(function(c) {
-        return (c.company && c.company.toLowerCase().indexOf(q) > -1) ||
-               (c.inn && c.inn.indexOf(q) > -1) ||
-               (c.lpr && c.lpr.toLowerCase().indexOf(q) > -1) ||
-               (c.emailStr && c.emailStr.toLowerCase().indexOf(q) > -1);
-      });
-      renderDropdownList(matches.slice(0, 30));
     }
 
-    function onSmartKeyDown(e) {
-      if (e.key === "Enter" || e.key === ",") {
-        e.preventDefault();
-        var val = document.getElementById("smartInput").value.trim().replace(/,/g, '');
-        if (val && val.indexOf('@') > -1) {
-          addManualEmailRecipient(val);
-          document.getElementById("smartInput").value = "";
-          document.getElementById("smartDropdown").style.display = "none";
+    function fallbackCopyText(text, onSuccess) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      if (onSuccess) onSuccess();
+    }
+
+    function normalizeClientRecord_(c) {
+      var lprArr = (c.lprList && c.lprList.length > 0)
+        ? c.lprList
+        : (c.lpr ? String(c.lpr).split(/[\n\/;,]+/).map(function(s) { return s.replace(/\(.*?\)/g, '').trim(); }).filter(Boolean) : []);
+      var emArr = (c.emailList && c.emailList.length > 0)
+        ? c.emailList
+        : (c.emailStr ? String(c.emailStr).split(/[,;\s\n]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.indexOf('@') > -1; }) : []);
+      c.lprList = lprArr;
+      c.emailList = emArr;
+      c.emailStr = emArr.join(', ');
+      return c;
+    }
+
+    function initDataOnLoad() {
+      var stateEl = document.getElementById("gasServerState");
+      var rawClientsAttr = stateEl ? (stateEl.getAttribute("data-clients") || "").trim() : "";
+      var rawPrefill = stateEl ? (stateEl.getAttribute("data-prefill") || "").trim() : "";
+      var rawDate = stateEl ? (stateEl.getAttribute("data-date") || "").trim() : "";
+
+      if (rawDate && rawDate.indexOf("<" + "?=") === -1) {
+        document.getElementById("headerDateText").innerText = rawDate;
+      } else {
+        document.getElementById("headerDateText").innerText = "19 октября 2026 г.";
+      }
+
+      if (rawPrefill && rawPrefill.indexOf("<" + "?=") === -1) {
+        prefillKey = rawPrefill;
+      }
+
+      var loadedFromGas = false;
+      if (rawClientsAttr && rawClientsAttr.indexOf("<" + "?=") === -1) {
+        try {
+          var parsed = JSON.parse(rawClientsAttr);
+          rawClientsFromSheet = (typeof parsed === "string") ? JSON.parse(parsed) : parsed;
+          if (Array.isArray(rawClientsFromSheet) && rawClientsFromSheet.length > 0) {
+            loadedFromGas = true;
+          }
+        } catch (e) {
+          rawClientsFromSheet = [];
         }
       }
+
+      if (!loadedFromGas) {
+        rawClientsFromSheet = FALLBACK_CLIENTS_PREVIEW.slice();
+      }
+      rawClientsFromSheet = rawClientsFromSheet.map(normalizeClientRecord_);
+
+      var tbody = document.getElementById("priceTableBody");
+      if (tbody && tbody.innerHTML.indexOf("<" + "?=") !== -1) {
+        renderFallbackPipesTable(tbody, FALLBACK_PIPES_PREVIEW);
+      }
+
+      if (prefillKey && rawClientsFromSheet.length > 0) {
+        var found = rawClientsFromSheet.find(function(c) { return c.key === prefillKey; });
+        if (found) toggleCompanySelection(found.key, true);
+      }
+
+      updateSheetTabCounts();
+      renderClientDirectory();
+      renderRecipientChips();
+      updateSelectionCount();
+
+      if (typeof google !== "undefined" && google.script && google.script.run) {
+        syncClientFromActiveSheetRow(false);
+      }
     }
 
-    function renderDropdownList(list) {
-      var dd = document.getElementById("smartDropdown");
-      dd.innerHTML = "";
+    function renderFallbackPipesTable(tbody, grouped) {
+      var html = "";
+      for (var grp in grouped) {
+        html += '<tr class="header-group-row" data-group="' + grp + '">' +
+                  '<td colspan="10" class="category-header"><span class="category-title">' + grp + '</span></td>' +
+                '</tr>';
+        grouped[grp].forEach(function(item) {
+          html += '<tr class="data-row" data-group="' + grp + '" data-condition="' + item.condition + '">' +
+                    '<td class="col-chk" style="text-align: center;"><input type="checkbox" class="custom-chk row-chk" onchange="updateRowSelection(this)"></td>' +
+                    '<td><span class="tag-category">' + item.category + '</span></td>' +
+                    '<td class="col-name" onclick="toggleRowCheckboxByName(this)">' + item.name + '</td>' +
+                    '<td class="col-center">' + item.diam + '</td>' +
+                    '<td class="col-center">' + item.wall + '</td>' +
+                    '<td class="col-center"><span class="tag-gost">' + item.std + '</span></td>' +
+                    '<td class="col-center" data-stock="' + item.stockText + '">' +
+                      '<div class="stock-stack">' +
+                        (item.stockTnStr ? '<span class="stock-tn">' + item.stockTnStr + '</span>' : '') +
+                        (item.stockMStr ? '<span class="stock-m">' + item.stockMStr + '</span>' : '') +
+                      '</div>' +
+                    '</td>' +
+                    '<td class="col-price-m">' + item.priceM + '</td>' +
+                    '<td class="col-price-tn">' + item.priceTn + '</td>' +
+                    '<td class="col-actions" style="text-align: center;">' +
+                      '<button type="button" class="btn-row-copy" onclick="copySingleRow(this)">Копия</button>' +
+                    '</td>' +
+                  '</tr>';
+        });
+      }
+      tbody.innerHTML = html;
+    }
+
+    window.onload = initDataOnLoad;
+
+    function updateSheetTabCounts() {
+      var allCnt = rawClientsFromSheet.length;
+      var waitCnt = rawClientsFromSheet.filter(function(c) { return c.sheet === "3. Лист ожидания"; }).length;
+      var whaleCnt = rawClientsFromSheet.filter(function(c) { return c.sheet === "2. Золотой список (Киты)"; }).length;
+      var coldCnt = rawClientsFromSheet.filter(function(c) { return c.sheet === "1. Обзвон (База)"; }).length;
+
+      document.getElementById("cntAll").innerText = "(" + allCnt + ")";
+      document.getElementById("cntWait").innerText = "(" + waitCnt + ")";
+      document.getElementById("cntWhale").innerText = "(" + whaleCnt + ")";
+      document.getElementById("cntCold").innerText = "(" + coldCnt + ")";
+    }
+
+    function toggleDirectoryPanel() {
+      isDirectoryOpen = !isDirectoryOpen;
+      var panel = document.getElementById("clientDirectoryPanel");
+      var label = document.getElementById("dirToggleLabel");
+      panel.style.display = isDirectoryOpen ? "block" : "none";
+      label.innerText = isDirectoryOpen ? "Скрыть список клиентов" : "Показать список клиентов";
+    }
+
+    function setClientSheetTab(sheetName, btnEl) {
+      currentClientSheetTab = sheetName;
+      document.querySelectorAll(".sheet-tab-btn").forEach(function(b) { b.classList.remove("active"); });
+      if (btnEl) btnEl.classList.add("active");
+      if (!isDirectoryOpen) toggleDirectoryPanel();
+      renderClientDirectory();
+    }
+
+    function onClientSearchInput() {
+      var val = document.getElementById("smartInput").value;
+      var clearBtn = document.getElementById("btnClearClientSearch");
+      clearBtn.style.display = val.length > 0 ? "inline-flex" : "none";
+      if (!isDirectoryOpen) toggleDirectoryPanel();
+      renderClientDirectory();
+    }
+
+    function clearClientSearch() {
+      document.getElementById("smartInput").value = "";
+      document.getElementById("btnClearClientSearch").style.display = "none";
+      renderClientDirectory();
+    }
+
+    function getFilteredClients_() {
+      var q = (document.getElementById("smartInput").value || "").toLowerCase().trim();
+      var onlyEmail = document.getElementById("chkOnlyWithEmail").checked;
+
+      return rawClientsFromSheet.filter(function(c) {
+        if (currentClientSheetTab !== "ALL" && c.sheet !== currentClientSheetTab) return false;
+        if (onlyEmail && (!c.emailList || c.emailList.length === 0)) return false;
+        if (!q) return true;
+
+        var hay = [
+          c.company, c.inn, c.lpr, c.emailStr, c.city, c.sphere, c.need,
+          (c.diams || []).join(" ")
+        ].join(" ").toLowerCase();
+        return hay.indexOf(q) > -1;
+      });
+    }
+
+    function renderClientDirectory() {
+      var panel = document.getElementById("clientDirectoryPanel");
+      var list = getFilteredClients_();
+      panel.innerHTML = "";
 
       if (list.length === 0) {
-        var val = document.getElementById("smartInput").value.trim();
-        if (val && val.indexOf('@') > -1) {
-          dd.innerHTML = "<div style='padding:10px 14px; color:#2563eb; font-weight:600; cursor:pointer;' onclick='addManualEmailRecipient(\"" + val + "\")'>➕ Добавить Email: " + val + "</div>";
+        var rawVal = document.getElementById("smartInput").value.trim();
+        if (rawVal.indexOf("@") > -1) {
+          panel.innerHTML =
+            '<div style="padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">' +
+              '<span style="color:#334155;">Добавить внешний Email: <strong>' + rawVal + '</strong></span>' +
+              '<button type="button" class="btn btn-sm btn-primary-send" onclick="addManualEmailFromInput()">+ Добавить</button>' +
+            '</div>';
         } else {
-          dd.innerHTML = "<div style='padding:10px 14px; color:#94a3b8;'>Не найдено в базе. Введите Email и нажмите Enter.</div>";
+          panel.innerHTML = '<div style="padding:14px; color:#64748b; text-align:center;">Клиенты не найдены.</div>';
         }
-        dd.style.display = "block";
         return;
       }
 
       list.forEach(function(c) {
-        var item = document.createElement("div");
-        item.className = "smart-dropdown-item";
-        var emText = c.emailStr ? "<span style='color:#2563eb; font-weight:600; font-size:11px;'>" + c.emailStr + "</span>" : "<span style='color:#f59e0b; font-size:11px;'>без email (только WhatsApp/PDF)</span>";
-        var lprPreview = (c.lprList && c.lprList.length > 0) ? c.lprList.join(' / ') : 'ЛПР не указан';
+        var recId = "comp_" + c.key;
+        var isSelected = !!recipientStore[recId];
 
-        item.innerHTML =
-          "<div>" +
-            "<strong>" + c.company + "</strong> " +
-            "<span style='color:#64748b; font-size:11px;'>(" + lprPreview + ")</span><br>" +
-            emText +
-          "</div>" +
-          "<span style='font-size:11px; color:#94a3b8;'>" + c.sheet + " • стр. " + c.row + "</span>";
+        var row = document.createElement("div");
+        row.className = "client-dir-row" + (isSelected ? " is-checked" : "");
 
-        item.onclick = function() {
-          addCompanyRecipient(c, false);
-          document.getElementById("smartInput").value = "";
-          dd.style.display = "none";
+        var sheetShort = c.sheet.replace(/^\d+\.\s*/, "");
+        var subParts = [sheetShort];
+        if (c.city) subParts.push(c.city);
+        if (c.need) subParts.push("Заявка: " + c.need);
+
+        var lprButtonsHtml = "";
+        if (c.lprList && c.lprList.length > 0) {
+          c.lprList.forEach(function(personName) {
+            var activeLpr = isSelected && recipientStore[recId].selectedLprs.indexOf(personName) > -1;
+            lprButtonsHtml +=
+              '<span class="person-pill' + (activeLpr ? ' active' : '') + '" ' +
+              'onclick="onDirectoryLprClick(event, \'' + c.key + '\', \'' + personName.replace(/'/g, "\\'") + '\')" ' +
+              'title="Обращаться к: ' + personName + '">' +
+                personName +
+              '</span>';
+          });
+        }
+
+        var emailHtml = (c.emailList && c.emailList.length > 0)
+          ? '<span class="client-dir-email">' + c.emailList.join(", ") + '</span>'
+          : '<span class="client-dir-email no-mail">нет email</span>';
+
+        row.innerHTML =
+          '<div class="client-dir-left">' +
+            '<input type="checkbox" class="client-dir-chk" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleCompanySelection(\'' + c.key + '\')">' +
+            '<span class="client-dir-company" title="' + c.company.replace(/"/g, '&quot;') + '">' + c.company + '</span>' +
+            '<span class="client-dir-sub">' + subParts.join(" • ") + '</span>' +
+            emailHtml +
+          '</div>' +
+          '<div class="client-dir-right" onclick="event.stopPropagation();">' +
+            lprButtonsHtml +
+          '</div>';
+
+        row.onclick = function() {
+          toggleCompanySelection(c.key);
         };
-        dd.appendChild(item);
+
+        panel.appendChild(row);
       });
-      dd.style.display = "block";
     }
 
-    function addCompanyRecipient(c, replaceExisting) {
-      if (replaceExisting) recipientStore = {};
-      var id = "comp_" + c.key;
-      var lprOptions = (c.lprList && c.lprList.length > 0) ? c.lprList : (c.lpr ? c.lpr.split(/[\n\/;]+/).map(function(s){return s.trim();}).filter(Boolean) : []);
-      var defaultLpr = lprOptions.length > 0 ? lprOptions[0] : "";
+    function toggleCompanySelection(clientKey, forceAdd) {
+      var c = rawClientsFromSheet.find(function(item) { return item.key === clientKey; });
+      if (!c) return;
+      var recId = "comp_" + c.key;
 
-      var clonedObj = JSON.parse(JSON.stringify(c));
-      clonedObj.selectedLpr = defaultLpr;
+      if (recipientStore[recId] && !forceAdd) {
+        delete recipientStore[recId];
+      } else if (!recipientStore[recId]) {
+        var lprOptions = c.lprList || [];
+        var defaultLprs = lprOptions.length > 0 ? [lprOptions[0]] : [];
+        var allEmails = (c.emailList || []).slice();
 
-      recipientStore[id] = {
-        id: id,
-        label: c.company,
-        email: c.emailStr,
-        isCompany: true,
-        lprOptions: lprOptions,
-        selectedLpr: defaultLpr,
-        clientObj: clonedObj
-      };
+        recipientStore[recId] = {
+          id: recId,
+          key: c.key,
+          label: c.company,
+          isCompany: true,
+          lprOptions: lprOptions,
+          selectedLprs: defaultLprs,
+          emailOptions: allEmails,
+          selectedEmails: allEmails.slice(),
+          clientObj: JSON.parse(JSON.stringify(c))
+        };
+        syncClientObjFields_(recipientStore[recId]);
+      }
+
+      renderClientDirectory();
       renderRecipientChips();
+    }
+
+    function onDirectoryLprClick(ev, clientKey, personName) {
+      ev.stopPropagation();
+      var recId = "comp_" + clientKey;
+      if (!recipientStore[recId]) {
+        toggleCompanySelection(clientKey, true);
+        recipientStore[recId].selectedLprs = [personName];
+        syncClientObjFields_(recipientStore[recId]);
+      } else {
+        toggleLprForRecipient(recId, personName);
+      }
+      renderClientDirectory();
+      renderRecipientChips();
+    }
+
+    function toggleLprForRecipient(recId, personName) {
+      var r = recipientStore[recId];
+      if (!r) return;
+
+      if (personName === "") {
+        r.selectedLprs = [];
+      } else if (personName === "__ALL__") {
+        r.selectedLprs = (r.lprOptions || []).slice();
+      } else {
+        var idx = r.selectedLprs.indexOf(personName);
+        if (idx > -1) {
+          r.selectedLprs.splice(idx, 1);
+        } else {
+          r.selectedLprs.push(personName);
+        }
+      }
+      syncClientObjFields_(r);
+      renderClientDirectory();
+      renderRecipientChips();
+    }
+
+    function toggleEmailForRecipient(recId, emailAddr) {
+      var r = recipientStore[recId];
+      if (!r) return;
+      var idx = r.selectedEmails.indexOf(emailAddr);
+      if (idx > -1) {
+        if (r.selectedEmails.length > 1) {
+          r.selectedEmails.splice(idx, 1);
+        } else {
+          showToast("Должен остаться хотя бы один активный Email", "warn");
+        }
+      } else {
+        r.selectedEmails.push(emailAddr);
+      }
+      syncClientObjFields_(r);
+      renderRecipientChips();
+    }
+
+    function syncClientObjFields_(r) {
+      if (!r || !r.clientObj) return;
+      r.clientObj.selectedLprs = r.selectedLprs.slice();
+      r.clientObj.selectedLpr = r.selectedLprs.join(", ");
+      r.clientObj.selectedEmails = r.selectedEmails.slice();
+      r.clientObj.emailStr = r.selectedEmails.join(", ");
+    }
+
+    function selectAllFilteredClientsWithEmail() {
+      var list = getFilteredClients_();
+      var added = 0;
+      list.forEach(function(c) {
+        if (c.emailList && c.emailList.length > 0) {
+          toggleCompanySelection(c.key, true);
+          added++;
+        }
+      });
+      if (added > 0) {
+        showToast("Выбрано компаний с Email: " + added + " шт.", "success");
+      } else {
+        showToast("В текущем списке нет компаний с Email", "warn");
+      }
+    }
+
+    function clearAllRecipients() {
+      recipientStore = {};
+      renderClientDirectory();
+      renderRecipientChips();
+    }
+
+    function addManualEmailFromInput() {
+      var inp = document.getElementById("smartInput");
+      var val = inp.value.trim().replace(/,/g, "");
+      if (!val || val.indexOf("@") === -1) {
+        showToast("Введите Email с символом @ в поле поиска", "warn");
+        inp.focus();
+        return;
+      }
+      addManualEmailRecipient(val);
+      inp.value = "";
+      document.getElementById("btnClearClientSearch").style.display = "none";
+      renderClientDirectory();
     }
 
     function addManualEmailRecipient(emailStr) {
       var clean = emailStr.trim();
-      if (!clean || clean.indexOf('@') === -1) return;
+      if (!clean || clean.indexOf("@") === -1) return;
       var id = "manual_" + clean.toLowerCase();
       recipientStore[id] = {
         id: id,
+        key: id,
         label: clean,
-        email: clean,
         isCompany: false,
         lprOptions: [],
-        selectedLpr: "",
-        clientObj: { company: '', lpr: '', selectedLpr: '', emailStr: clean, sheet: '', row: 0 }
+        selectedLprs: [],
+        emailOptions: [clean],
+        selectedEmails: [clean],
+        clientObj: { company: "", lpr: "", selectedLpr: "", selectedLprs: [], selectedEmails: [clean], emailStr: clean, sheet: "", row: 0 }
       };
       renderRecipientChips();
+      showToast("Добавлен адрес: " + clean, "success");
     }
 
-    function selectLprForRecipient(recId, chosenName) {
-      if (!recipientStore[recId]) return;
-      recipientStore[recId].selectedLpr = chosenName;
-      recipientStore[recId].clientObj.selectedLpr = chosenName;
-      renderRecipientChips();
+    function onSmartKeyDown(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        var val = document.getElementById("smartInput").value.trim().replace(/,/g, "");
+        if (val && val.indexOf("@") > -1) {
+          addManualEmailFromInput();
+        }
+      }
     }
 
     function removeRecipient(id) {
       delete recipientStore[id];
+      renderClientDirectory();
       renderRecipientChips();
     }
 
     function renderRecipientChips() {
+      var box = document.getElementById("selectedRecipientsBox");
       var wrap = document.getElementById("recipientChipsWrap");
-      var lprBar = document.getElementById("lprSelectorBar");
-      var lprContainer = document.getElementById("lprPillsContainer");
+      var counterPill = document.getElementById("selectedClientsCounterPill");
+      var sendEmailLabel = document.getElementById("btnSendEmailLabel");
       var keys = Object.keys(recipientStore);
 
+      counterPill.innerText = "Выбрано: " + keys.length;
+      counterPill.classList.toggle("has-items", keys.length > 0);
+
+      if (sendEmailLabel) {
+        sendEmailLabel.innerText = keys.length > 0
+          ? "Отправить на Email (" + keys.length + " пол. + PDF)"
+          : "Отправить на Email (+PDF)";
+      }
+
       if (keys.length === 0) {
-        wrap.innerHTML = "<span style='color:#64748b; font-size:12px;'>Клиент не выбран — нажмите <strong>«🎯 С текущей строки»</strong> или выберите компанию в поиске выше.</span>";
-        lprBar.style.display = "none";
+        box.style.display = "none";
+        wrap.innerHTML = "";
         return;
       }
 
+      box.style.display = "block";
       wrap.innerHTML = "";
-      lprContainer.innerHTML = "";
-      var hasAnyLprOptions = false;
-
       keys.forEach(function(k) {
         var r = recipientStore[k];
-        var chip = document.createElement("div");
-        chip.className = "recipient-chip";
-        var lprBadge = r.selectedLpr ? " • 👤 " + r.selectedLpr : "";
-        var sheetBadge = (r.clientObj && r.clientObj.sheet) ? " <span style='color:#64748b; font-weight:500;'>(" + r.clientObj.sheet.replace(/^\d+\.\s*/, '') + ", стр." + r.clientObj.row + ")</span>" : "";
-        chip.innerHTML =
-          "<span>" + (r.isCompany ? "🏢 " : "✉️ ") + r.label + lprBadge + sheetBadge + "</span>" +
-          "<span class='recipient-chip-del' onclick='removeRecipient(\"" + k + "\")'>✕</span>";
-        wrap.appendChild(chip);
+        var rowEl = document.createElement("div");
+        rowEl.className = "selected-recipient-row";
 
-        // Рисуем таблетки выбора конкретного ЛПР (даже если там 1 или 3 человека + вариант «Без имени»)
+        var lprHtml = "";
         if (r.isCompany && r.lprOptions && r.lprOptions.length > 0) {
-          hasAnyLprOptions = true;
-          r.lprOptions.forEach(function(personName) {
-            var pill = document.createElement("span");
-            pill.className = "lpr-pill" + (r.selectedLpr === personName ? " active" : "");
-            pill.innerText = personName;
-            pill.onclick = function() { selectLprForRecipient(k, personName); };
-            lprContainer.appendChild(pill);
+          lprHtml += '<div class="mini-pills-wrap"><span class="mini-label">ЛПР:</span>';
+          r.lprOptions.forEach(function(pName) {
+            var isAct = r.selectedLprs.indexOf(pName) > -1;
+            lprHtml +=
+              '<span class="person-pill' + (isAct ? ' active' : '') + '" onclick="toggleLprForRecipient(\'' + k + '\', \'' + pName.replace(/'/g, "\\'") + '\')">' +
+                pName +
+              '</span>';
           });
-
-          var noNamePill = document.createElement("span");
-          noNamePill.className = "lpr-pill" + (r.selectedLpr === "" ? " active" : "");
-          noNamePill.innerText = "Без имени (Общее)";
-          noNamePill.onclick = function() { selectLprForRecipient(k, ""); };
-          lprContainer.appendChild(noNamePill);
+          if (r.lprOptions.length > 1) {
+            var allSelected = r.selectedLprs.length === r.lprOptions.length;
+            lprHtml +=
+              '<span class="person-pill' + (allSelected ? ' active' : '') + '" onclick="toggleLprForRecipient(\'' + k + '\', \'__ALL__\')">' +
+                'Все' +
+              '</span>';
+          }
+          var noneSelected = r.selectedLprs.length === 0;
+          lprHtml +=
+            '<span class="person-pill' + (noneSelected ? ' active' : '') + '" onclick="toggleLprForRecipient(\'' + k + '\', \'\')">' +
+              'Без имени' +
+            '</span></div>';
         }
-      });
 
-      lprBar.style.display = hasAnyLprOptions ? "flex" : "none";
+        var emailsHtml = "";
+        if (r.emailOptions && r.emailOptions.length > 0) {
+          emailsHtml += '<div class="mini-pills-wrap"><span class="mini-label">Почта:</span>';
+          r.emailOptions.forEach(function(em) {
+            var isEmOn = r.selectedEmails.indexOf(em) > -1;
+            emailsHtml +=
+              '<span class="email-pill' + (isEmOn ? '' : ' off') + '" onclick="toggleEmailForRecipient(\'' + k + '\', \'' + em.replace(/'/g, "\\'") + '\')">' +
+                em +
+              '</span>';
+          });
+          emailsHtml += '</div>';
+        } else {
+          emailsHtml = '<span style="font-size:11.5px; color:#94a3b8;">без email</span>';
+        }
+
+        rowEl.innerHTML =
+          '<div class="sel-comp-info">' +
+            '<span class="sel-comp-name">' + r.label + '</span>' +
+          '</div>' +
+          '<div class="sel-controls-group">' +
+            lprHtml +
+            emailsHtml +
+            '<button type="button" class="btn-remove-rec" onclick="removeRecipient(\'' + k + '\')" title="Убрать">✕</button>' +
+          '</div>';
+
+        wrap.appendChild(rowEl);
+      });
+    }
+
+    function syncClientFromActiveSheetRow(showNotification) {
+      if (typeof google === "undefined" || !google.script || !google.script.run) {
+        if (showNotification) showToast("База клиентов обновлена", "success");
+        return;
+      }
+      if (showNotification) showToast("Обновляю список клиентов...", "");
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.clients && Array.isArray(res.clients)) {
+            rawClientsFromSheet = res.clients.map(normalizeClientRecord_);
+            updateSheetTabCounts();
+            renderClientDirectory();
+          }
+          if (res && res.activeKey && Object.keys(recipientStore).length === 0) {
+            var found = rawClientsFromSheet.find(function(c) { return c.key === res.activeKey; });
+            if (found) {
+              toggleCompanySelection(found.key, true);
+            }
+          }
+          if (showNotification) {
+            showToast("База клиентов синхронизирована (" + rawClientsFromSheet.length + " комп.)", "success");
+          }
+        })
+        .withFailureHandler(function() {
+          if (showNotification) showToast("Не удалось обновить данные из таблицы", "error");
+        })
+        .getActiveClientFromSheetLive();
     }
 
     function getActiveClientGreetingName_() {
       var keys = Object.keys(recipientStore);
       if (keys.length === 0) return "";
       var first = recipientStore[keys[0]];
-      return (first && first.selectedLpr) ? first.selectedLpr.trim() : "";
+      if (first && first.selectedLprs && first.selectedLprs.length > 0) {
+        return first.selectedLprs.join(", ");
+      }
+      return "";
     }
 
     function getActiveClientsPayload_() {
       return Object.keys(recipientStore).map(function(k) {
+        syncClientObjFields_(recipientStore[k]);
         return recipientStore[k].clientObj;
       });
     }
 
     function setGroupFilter(grpName, pillEl) {
       currentGroupFilter = grpName;
-      document.querySelectorAll('.grp-pill').forEach(function(p) { p.classList.remove('active'); });
-      if (pillEl) pillEl.classList.add('active');
+      document.querySelectorAll(".grp-pill").forEach(function(p) { p.classList.remove("active"); });
+      if (pillEl) pillEl.classList.add("active");
       filterPipes();
     }
 
@@ -878,16 +1628,16 @@
       var rows = document.querySelectorAll("tr.data-row");
 
       rows.forEach(function(r) {
-        var grp = r.getAttribute('data-group');
+        var grp = r.getAttribute("data-group");
         var text = r.textContent.toLowerCase();
-        var matchGrp = (currentGroupFilter === 'ALL' || grp === currentGroupFilter);
-        var matchText = (query === '' || text.indexOf(query) > -1);
+        var matchGrp = (currentGroupFilter === "ALL" || grp === currentGroupFilter);
+        var matchText = (query === "" || text.indexOf(query) > -1);
         r.style.display = (matchGrp && matchText) ? "" : "none";
       });
 
       var groupHeaders = document.querySelectorAll("tr.header-group-row");
       groupHeaders.forEach(function(gh) {
-        var grp = gh.getAttribute('data-group');
+        var grp = gh.getAttribute("data-group");
         var visibleRows = document.querySelectorAll('tr.data-row[data-group="' + grp + '"]:not([style*="display: none"])');
         gh.style.display = visibleRows.length > 0 ? "" : "none";
       });
@@ -899,22 +1649,31 @@
       var visibleCheckboxes = document.querySelectorAll("tr.data-row:not([style*='display: none']) .row-chk");
       visibleCheckboxes.forEach(function(chk) {
         chk.checked = master.checked;
-        chk.closest('tr').classList.toggle('row-selected', master.checked);
+        chk.closest("tr").classList.toggle("row-selected", master.checked);
       });
       updateSelectionCount();
     }
 
+    function toggleRowCheckboxByName(cellEl) {
+      var tr = cellEl.closest("tr");
+      if (!tr) return;
+      var chk = tr.querySelector(".row-chk");
+      if (!chk) return;
+      chk.checked = !chk.checked;
+      updateRowSelection(chk);
+    }
+
     function updateRowSelection(chk) {
-      chk.closest('tr').classList.toggle('row-selected', chk.checked);
+      chk.closest("tr").classList.toggle("row-selected", chk.checked);
       updateSelectionCount();
     }
 
     function clearSelection() {
-      document.querySelectorAll('.row-chk').forEach(function(chk) {
+      document.querySelectorAll(".row-chk").forEach(function(chk) {
         chk.checked = false;
-        chk.closest('tr').classList.remove('row-selected');
+        chk.closest("tr").classList.remove("row-selected");
       });
-      document.getElementById('checkAll').checked = false;
+      document.getElementById("checkAll").checked = false;
       updateSelectionCount();
     }
 
@@ -926,28 +1685,23 @@
       var emailInfo = document.getElementById("emailItemsInfo");
 
       if (checkedRows.length > 0) {
-        btnLabel.innerText = "В Мессенджер (" + checkedRows.length + " поз. + Лог)";
+        btnLabel.innerText = "Скопировать в мессенджер (" + checkedRows.length + " поз.)";
         btnClear.style.display = "inline-flex";
-        badge.innerText = "Отмечено галочками: " + checkedRows.length + " поз. (пойдет в тело КП)";
-        if (emailInfo) emailInfo.innerText = "В теле письма: Выбранные позиции (" + checkedRows.length + " шт.) + 📎 PDF полного прайса";
+        badge.innerText = "Выбрано позиций: " + checkedRows.length;
+        if (emailInfo) emailInfo.innerText = "В письме: выбранные позиции (" + checkedRows.length + " шт.) + PDF прайса";
       } else {
-        btnLabel.innerText = "В Мессенджер (+Лог)";
+        btnLabel.innerText = "Скопировать для мессенджера";
         btnClear.style.display = "none";
-        badge.innerText = "Отмечено галочками: 0 (отправится весь видимый список)";
-        if (emailInfo) emailInfo.innerText = "В теле письма: Весь прайс (Новые / Лежалые / Восст. / Б/у) + 📎 PDF полного прайса";
+        badge.innerText = "Выбрано позиций: 0 (весь список)";
+        if (emailInfo) emailInfo.innerText = "В письме: весь прайс + PDF";
       }
-    }
-
-    function toggleEmailDrawer() {
-      var drawer = document.getElementById("emailDrawer");
-      drawer.style.display = (drawer.style.display === "block") ? "none" : "block";
     }
 
     function collectTargetRows_() {
       var checkedRows = document.querySelectorAll("tr.data-row:not([style*='display: none']) .row-chk:checked");
       var targetRows = [];
       if (checkedRows.length > 0) {
-        checkedRows.forEach(function(chk) { targetRows.push(chk.closest('tr')); });
+        checkedRows.forEach(function(chk) { targetRows.push(chk.closest("tr")); });
       } else {
         document.querySelectorAll("tr.data-row:not([style*='display: none'])").forEach(function(r) {
           targetRows.push(r);
@@ -956,40 +1710,42 @@
       return targetRows;
     }
 
+    /* Копирование одной позиции — без звездочек (*), без смайлов, с НДС 22% */
     function copySingleRow(btnElement) {
-      var row = btnElement.closest('tr');
-      var grp = row.getAttribute('data-group');
-      var cond = row.getAttribute('data-condition') || '';
-      var name = row.querySelector('.col-name').innerText.trim();
-      var diam = row.querySelectorAll('.col-center')[0].innerText.trim();
-      var cat = row.querySelector('.tag-category').innerText.trim();
-      var gost = row.querySelector('.tag-gost').innerText.trim();
-      var stock = row.querySelector('[data-stock]').getAttribute('data-stock');
-      var priceTn = row.querySelector('.col-price-tn').innerText.trim();
-      var priceM = row.querySelector('.col-price-m').innerText.trim();
+      var row = btnElement.closest("tr");
+      var grp = row.getAttribute("data-group");
+      var name = row.querySelector(".col-name").innerText.trim();
+      var diam = row.querySelectorAll(".col-center")[0].innerText.trim();
+      var cat = row.querySelector(".tag-category").innerText.trim();
+      var gost = row.querySelector(".tag-gost").innerText.trim();
+      var stock = row.querySelector("[data-stock]").getAttribute("data-stock");
+      var priceTn = row.querySelector(".col-price-tn").innerText.trim();
+      var priceM = row.querySelector(".col-price-m").innerText.trim();
 
       var lprName = getActiveClientGreetingName_();
       var greeting = lprName ? "Здравствуйте, " + lprName + "!\n\n" : "";
-      var details = [cat, cond, gost].filter(Boolean).join(', ');
+      var cleanGost = (gost && gost !== "—" && gost !== "-") ? gost : "";
+      var details = [cat, cleanGost].filter(Boolean).join(", ");
 
       var text = greeting + [
-        "📦 *НАЛИЧИЕ: " + name.toUpperCase() + "*",
-        "🔹 " + grp + " (" + details + ")",
-        "⚖️ Остаток: *" + stock + "*",
-        "💰 Цена с НДС: *" + priceTn + "* (" + priceM + "/м)",
+        "НАЛИЧИЕ НА СКЛАДЕ: " + name.toUpperCase(),
+        grp + (details ? " (" + details + ")" : ""),
+        "Остаток: " + stock,
+        "Цена с НДС 22%: " + priceTn + "/тн (" + priceM + "/м)",
         "",
-        "📍 База: г. Воронеж (открытая погрузка)",
-        "📞 Отдел продаж: *8 (906) 588-37-77 (Кирилл)*"
+        "Склад: г. Воронеж. Помощь с доставкой по РФ.",
+        "Отдел продаж: +7 (906) 588-37-77 (Кирилл)"
       ].join("\n");
 
-      navigator.clipboard.writeText(text).then(function() {
-        btnElement.innerText = "✓ Скопировано";
+      copyToClipboardSafe(text, function() {
+        btnElement.innerText = "Скопировано";
         setTimeout(function() { btnElement.innerText = "Копия"; }, 1800);
+        showToast("Позиция «" + name + "» скопирована в буфер", "success");
 
         var clients = getActiveClientsPayload_();
-        if (clients.length > 0) {
+        if (clients.length > 0 && typeof google !== "undefined" && google.script && google.script.run) {
           google.script.run.logClientPriceAction({
-            mode: 'whatsapp',
+            mode: "whatsapp",
             isFullPrice: false,
             diams: [diam],
             clients: clients
@@ -998,67 +1754,73 @@
       });
     }
 
+    /* Копирование списка в мессенджер — чистый читаемый текст без звездочек (*), без дублей состояния и с НДС 22% */
     function copySelectedOrVisible() {
       var targetRows = collectTargetRows_();
       if (targetRows.length === 0) {
-        alert("Нет позиций для копирования!");
+        showToast("Нет видимых позиций для копирования", "warn");
         return;
       }
 
       var lprName = getActiveClientGreetingName_();
       var customComment = document.getElementById("inputCustomComment") ? document.getElementById("inputCustomComment").value.trim() : "";
+      var dateLabel = document.getElementById("headerDateText").innerText;
 
       var textLines = [];
       if (lprName) {
-        textLines.push("Здравствуйте, *" + lprName + "*!\n");
+        textLines.push("Здравствуйте, " + lprName + "!\n");
       }
-      textLines.push("📦 *НАЛИЧИЕ ТРУБ НА СКЛАДЕ («КАПИТАЛ-ПЛЮС»)*");
-      textLines.push("📍 Склад: г. Воронеж | 📅 На <?= generatedDate ?>");
+      textLines.push("НАЛИЧИЕ ТРУБ НА СКЛАДЕ (ООО «КАПИТАЛ-ПЛЮС»)");
+      textLines.push("Склад: г. Воронеж | Актуально на " + dateLabel);
       if (customComment) {
-        textLines.push("💬 Условия: " + customComment);
+        textLines.push("Условия: " + customComment);
       }
 
       var currentGrp = "";
       var diams = [];
       targetRows.forEach(function(r) {
-        var grp = r.getAttribute('data-group');
-        var cond = r.getAttribute('data-condition') || '';
+        var grp = r.getAttribute("data-group");
         if (grp !== currentGrp) {
           currentGrp = grp;
-          textLines.push("\n🔹 *" + currentGrp.toUpperCase() + ":*");
+          textLines.push("\n" + currentGrp.toUpperCase() + ":");
         }
-        var name = r.querySelector('.col-name').innerText.trim();
-        var diam = r.querySelectorAll('.col-center')[0].innerText.trim();
+        var name = r.querySelector(".col-name").innerText.trim();
+        var diam = r.querySelectorAll(".col-center")[0].innerText.trim();
         if (diam && diams.indexOf(diam) === -1) diams.push(diam);
-        var cat = r.querySelector('.tag-category').innerText.trim();
-        var gost = r.querySelector('.tag-gost').innerText.trim();
-        var stock = r.querySelector('[data-stock]').getAttribute('data-stock');
-        var priceTn = r.querySelector('.col-price-tn').innerText.trim();
-        var priceM = r.querySelector('.col-price-m').innerText.trim();
+        var cat = r.querySelector(".tag-category").innerText.trim();
+        var gost = r.querySelector(".tag-gost").innerText.trim();
+        var cleanGost = (gost && gost !== "—" && gost !== "-") ? gost : "";
+        var stock = r.querySelector("[data-stock]").getAttribute("data-stock");
+        var priceTn = r.querySelector(".col-price-tn").innerText.trim();
+        var priceM = r.querySelector(".col-price-m").innerText.trim();
 
-        var details = [cat, cond, gost].filter(Boolean).join(', ');
-        textLines.push("• *" + name + "* (" + details + ") — *" + stock + "*");
-        textLines.push("  Цена с НДС: *" + priceTn + "* (" + priceM + "/м)");
+        var details = [cat, cleanGost].filter(Boolean).join(", ");
+        var detailsStr = details ? " (" + details + ")" : "";
+        textLines.push("• " + name + detailsStr + " — " + stock + " — " + priceTn + "/тн (" + priceM + "/м)");
       });
 
-      textLines.push("\n───────────────────────");
-      textLines.push("🚚 Погрузка в открытый транспорт, помощь с логистикой.");
-      textLines.push("📞 Отдел продаж: *8 (906) 588-37-77 (Кирилл)*");
+      textLines.push("\n-----------------------------------");
+      textLines.push("Все цены указаны с учетом НДС 22%. Помощь с доставкой по РФ.");
+      textLines.push("Отдел продаж: +7 (906) 588-37-77 (Кирилл)");
 
-      navigator.clipboard.writeText(textLines.join("\n")).then(function() {
+      copyToClipboardSafe(textLines.join("\n"), function() {
         var label = document.getElementById("btnCopyLabel");
         var clients = getActiveClientsPayload_();
 
         if (clients.length > 0) {
-          label.innerText = "✓ Скопировано + Записано в Историю!";
-          google.script.run.logClientPriceAction({
-            mode: 'whatsapp',
-            isFullPrice: targetRows.length > 15,
-            diams: diams,
-            clients: clients
-          });
+          label.innerText = "Скопировано + в Историю";
+          showToast("Текст скопирован и записан в Историю (" + clients.length + " комп.)", "success");
+          if (typeof google !== "undefined" && google.script && google.script.run) {
+            google.script.run.logClientPriceAction({
+              mode: "whatsapp",
+              isFullPrice: targetRows.length > 15,
+              diams: diams,
+              clients: clients
+            });
+          }
         } else {
-          label.innerText = "✓ Скопировано в буфер!";
+          label.innerText = "Скопировано в буфер";
+          showToast("Чистый текст КП скопирован для мессенджера", "success");
         }
 
         clearSelection();
@@ -1070,14 +1832,14 @@
       var targetRows = collectTargetRows_();
       var diams = [];
       targetRows.forEach(function(r) {
-        var d = r.querySelectorAll('.col-center')[0].innerText.trim();
+        var d = r.querySelectorAll(".col-center")[0].innerText.trim();
         if (d && diams.indexOf(d) === -1) diams.push(d);
       });
 
       var clients = getActiveClientsPayload_();
-      if (clients.length > 0) {
+      if (clients.length > 0 && typeof google !== "undefined" && google.script && google.script.run) {
         google.script.run.logClientPriceAction({
-          mode: 'pdf',
+          mode: "pdf",
           isFullPrice: targetRows.length > 15,
           diams: diams,
           clients: clients
@@ -1087,46 +1849,53 @@
     }
 
     function executeSendProposal(isDraftOnly) {
-      var keys = Object.keys(recipientStore);
-      var pendingVal = document.getElementById("smartInput").value.trim();
-
-      if (pendingVal && pendingVal.indexOf('@') > -1) {
+      var pendingVal = document.getElementById("smartInput").value.trim().replace(/,/g, "");
+      if (pendingVal && pendingVal.indexOf("@") > -1) {
         addManualEmailRecipient(pendingVal);
-        keys = Object.keys(recipientStore);
+        document.getElementById("smartInput").value = "";
       }
 
+      var keys = Object.keys(recipientStore);
       if (keys.length === 0) {
-        alert("Выберите компанию (кнопка «🎯 С текущей строки» или поиск) или введите Email!");
+        showToast("Отметьте галочками хотя бы одну компанию или введите Email", "warn");
         document.getElementById("smartInput").focus();
+        return;
+      }
+
+      var clientsPayload = getActiveClientsPayload_().filter(function(c) {
+        return c.emailStr && c.emailStr.indexOf("@") > -1;
+      });
+
+      if (clientsPayload.length === 0) {
+        showToast("У выбранных компаний нет Email. Выберите компании с почтой или скопируйте КП в мессенджер.", "warn");
         return;
       }
 
       var targetRows = collectTargetRows_();
       if (targetRows.length === 0) {
-        alert("Нет позиций склада для отправки!");
+        showToast("Нет позиций склада для отправки", "warn");
         return;
       }
 
       var items = [];
       targetRows.forEach(function(r) {
         items.push({
-          name: r.querySelector('.col-name').innerText.trim(),
-          category: r.querySelector('.tag-category').innerText.trim(),
-          condition: r.getAttribute('data-condition') || '',
-          group: r.getAttribute('data-group') || '',
-          diam: r.querySelectorAll('.col-center')[0].innerText.trim(),
-          wall: r.querySelectorAll('.col-center')[1].innerText.trim(),
-          gost: r.querySelector('.tag-gost').innerText.trim(),
-          stock: r.querySelector('[data-stock]').getAttribute('data-stock'),
-          priceM: r.querySelector('.col-price-m').innerText.trim(),
-          priceTn: r.querySelector('.col-price-tn').innerText.trim()
+          name: r.querySelector(".col-name").innerText.trim(),
+          category: r.querySelector(".tag-category").innerText.trim(),
+          condition: r.getAttribute("data-condition") || "",
+          group: r.getAttribute("data-group") || "",
+          diam: r.querySelectorAll(".col-center")[0].innerText.trim(),
+          wall: r.querySelectorAll(".col-center")[1].innerText.trim(),
+          gost: r.querySelector(".tag-gost").innerText.trim(),
+          stock: r.querySelector("[data-stock]").getAttribute("data-stock"),
+          priceM: r.querySelector(".col-price-m").innerText.trim(),
+          priceTn: r.querySelector(".col-price-tn").innerText.trim()
         });
       });
 
-      var clientsPayload = getActiveClientsPayload_();
       var sendBtn = document.getElementById("btnSendProposal");
-      var originalBtnText = sendBtn.innerText;
-      sendBtn.innerText = isDraftOnly ? "⏳ Черновик + PDF..." : "⏳ Отправка + PDF...";
+      var originalBtnHtml = sendBtn.innerHTML;
+      sendBtn.innerText = isDraftOnly ? "Создаю черновики..." : "Отправляю КП...";
       sendBtn.disabled = true;
 
       var payload = {
@@ -1137,22 +1906,38 @@
         items: items
       };
 
+      if (typeof google === "undefined" || !google.script || !google.script.run) {
+        setTimeout(function() {
+          sendBtn.innerHTML = originalBtnHtml;
+          sendBtn.disabled = false;
+          showToast(
+            (isDraftOnly ? "[Демо] Создано черновиков: " : "[Демо] Отправлено писем: ") +
+            clientsPayload.length + " шт. (позиций: " + items.length + ")",
+            "success"
+          );
+        }, 500);
+        return;
+      }
+
       google.script.run
         .withSuccessHandler(function(res) {
-          sendBtn.innerText = originalBtnText;
+          sendBtn.innerHTML = originalBtnHtml;
           sendBtn.disabled = false;
           if (res && res.success) {
-            alert(res.isDraft
-              ? "✅ Создан черновик с вложенным PDF полного прайса и записан лог в Историю!"
-              : "✅ Письмо + PDF полного прайса отправлены (" + res.sentCount + " шт.) и записаны в Историю!");
+            showToast(
+              res.isDraft
+                ? "Созданы черновики (" + res.sentCount + " шт.) и записаны в Историю"
+                : "Отправлено писем: " + res.sentCount + " шт. Записано в Историю",
+              "success"
+            );
           } else {
-            alert("⚠️ Ошибка: " + (res.message || "Неизвестная ошибка"));
+            showToast("Ошибка: " + (res && res.message ? res.message : "Неизвестная ошибка"), "error");
           }
         })
         .withFailureHandler(function(err) {
-          sendBtn.innerText = originalBtnText;
+          sendBtn.innerHTML = originalBtnHtml;
           sendBtn.disabled = false;
-          alert("⚠️ Ошибка Apps Script: " + err.message);
+          showToast("Ошибка Apps Script: " + err.message, "error");
         })
         .sendBatchProposals(payload);
     }
@@ -1160,47 +1945,23 @@
     var isMinimized = false;
     function toggleMinimizeWindow() {
       isMinimized = !isMinimized;
-      var docWrapper = document.getElementById('documentWrapper');
-      var pipeFilterBar = document.getElementById('pipeFilterBar');
-      var activeClientCard = document.getElementById('activeClientCard');
-      var smartInput = document.getElementById('smartInput');
-      var btnSync = document.getElementById('btnSyncActiveRow');
-      var btnCopy = document.getElementById('btnCopyText');
-      var btnEmail = document.getElementById('btnOpenEmail');
-      var btnPrint = document.getElementById('btnPrintDoc');
-      var minIcon = document.getElementById('minIcon');
-      var minText = document.getElementById('minText');
+      var docWrapper = document.getElementById("documentWrapper");
 
       if (isMinimized) {
-        document.body.classList.add('is-minimized');
-        docWrapper.style.display = 'none';
-        pipeFilterBar.style.display = 'none';
-        activeClientCard.style.display = 'none';
-        smartInput.style.display = 'none';
-        btnSync.style.display = 'none';
-        btnCopy.style.display = 'none';
-        btnEmail.style.display = 'none';
-        btnPrint.style.display = 'none';
-        minIcon.innerText = '🗖';
-        minText.innerText = 'Развернуть прайс';
-        google.script.host.setWidth(220);
-        google.script.host.setHeight(54);
+        document.body.classList.add("is-minimized");
+        docWrapper.style.display = "none";
+        if (typeof google !== "undefined" && google.script && google.script.host) {
+          google.script.host.setWidth(230);
+          google.script.host.setHeight(52);
+        }
       } else {
-        document.body.classList.remove('is-minimized');
-        docWrapper.style.display = 'block';
-        pipeFilterBar.style.display = 'flex';
-        activeClientCard.style.display = 'flex';
-        smartInput.style.display = 'block';
-        btnSync.style.display = 'inline-flex';
-        btnCopy.style.display = 'inline-flex';
-        btnEmail.style.display = 'inline-flex';
-        btnPrint.style.display = 'inline-flex';
-        minIcon.innerText = '➖';
-        minText.innerText = 'Свернуть';
-        google.script.host.setWidth(1180);
-        google.script.host.setHeight(860);
-        // При разворачивании окна автоматически подхватываем текущую выделенную строку таблицы!
-        syncClientFromActiveSheetRow();
+        document.body.classList.remove("is-minimized");
+        docWrapper.style.display = "block";
+        if (typeof google !== "undefined" && google.script && google.script.host) {
+          google.script.host.setWidth(1220);
+          google.script.host.setHeight(880);
+        }
+        syncClientFromActiveSheetRow(false);
       }
     }
   </script>
