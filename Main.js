@@ -1,7 +1,7 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.3)
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.4)
  * Файл: Main.gs — Главное меню, глобальные утилиты и маршрутизатор триггеров
- * с автоматическим сбросом подсветок при очистке ячеек и пакетном удалении (Delete/Backspace).
+ * с автоматическим сбросом подсветок и авто-подъемом очереди при обновлении страницы.
  */
 
 function onOpen() {
@@ -18,18 +18,22 @@ function onOpen() {
     .addToUi();
 
   try {
-    const activeSheet = SpreadsheetApp.getActiveSheet();
-    if (activeSheet) {
-      const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания", "4.Архив лидов"];
-      if (crmSheets.includes(activeSheet.getName().trim())) {
-        if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
-          highlightDuplicateInnsOnSheet_(activeSheet);
-        }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
+
+    crmSheets.forEach(sName => {
+      const sh = getSheetByNameSafe(ss, sName);
+      if (sh) {
         if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
-          syncUnpackedNotesOnSheetSilent_(activeSheet);
+          syncUnpackedNotesOnSheetSilent_(sh);
+        }
+        if (typeof sortAndHighlightDeadlinesOnSheet_ === 'function') {
+          sortAndHighlightDeadlinesOnSheet_(sh);
+        } else if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
+          highlightDuplicateInnsOnSheet_(sh);
         }
       }
-    }
+    });
   } catch (e) {}
 }
 

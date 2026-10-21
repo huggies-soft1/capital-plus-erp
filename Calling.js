@@ -2,7 +2,8 @@
  * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.4)
  * Файл: Calling.gs — Маршрутизация лидов, скоростной парсер труб (53010 / 530*10 / 630 8),
  * 100% АВТОМАТИЧЕСКОЕ Досье (K -> Заметка B), мгновенный сброс подсветок на пустых ячейках,
- * авто-архивация H+I+J в Историю (N), ветка «Проход секретаря (Выбить ЛПР)» в Обзвоне и живой мозг колонки O.
+ * авто-архивация H+I+J в Историю (N), ветка «Проход секретаря (Выбить ЛПР)» в Обзвоне,
+ * живой мозг колонки O, ВЫПАДАЮЩИЙ КАЛЕНДАРЬ + КОРРЕКТИРОВКА ВРЕМЕНИ в L и авто-подъем очереди.
  */
 
 const STANDARD_PIPE_DIAMS_ = [
@@ -130,10 +131,26 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
+  // =================================================================
+  // 2.9 ВЫПАДАЮЩИЙ КАЛЕНДАРЬ ДАТЫ + КОРРЕКТИРОВКА ВРЕМЕНИ (Колонка L / 12)
+  // Хранит настоящий объект Date, чтобы работал календарь по двойному клику!
+  // =================================================================
   if (col === 12) {
-    const dlVal = e.value !== undefined ? String(e.value).trim() : String(sheet.getRange(row, 12).getValue() || '').trim();
-    if (!dlVal) {
-      sheet.getRange(row, 12).setBackground(null);
+    const cell = sheet.getRange(row, 12);
+    const cellVal = cell.getValue();
+    const timeZone = sheet.getParent().getSpreadsheetTimeZone() || "Europe/Moscow";
+
+    const dlObj = parseSmartDeadlineInput_(cellVal, e.value, e.oldValue, timeZone);
+    ensureDateValidationOnCell_(cell);
+
+    if (dlObj.dateObj) {
+      cell.setNumberFormat(dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+      cell.setValue(dlObj.dateObj);
+      updateSingleRowDeadlineHighlight_(sheet, row, dlObj);
+    } else {
+      cell.clearContent();
+      cell.setNumberFormat("dd.MM.yyyy");
+      cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
     }
     return;
   }
@@ -177,13 +194,8 @@ function handleCallingSheetEdit(e, sheet) {
   let history       = String(rowData[13] || '').trim();
 
   const needSnapshot = buildNeedSnapshot_(need, pipeType, application);
-
-  let formattedDeadline = "";
-  if (deadline instanceof Date) {
-    formattedDeadline = Utilities.formatDate(deadline, timeZone, "yyyy-MM-dd");
-  } else if (deadline) {
-    formattedDeadline = String(deadline).trim();
-  }
+  const existingDlObj = parseDeadlineObj_(deadline, timeZone);
+  const existingIsoDeadline = existingDlObj.isoDate;
 
   // === ЗАЩИТА ПРАВИЛА №6: ЗАПРЕТ РУЧНОГО ПЕРЕВОДА В КИТЫ ===
   if (decision.includes("кит") || decision.includes("золот")) {
@@ -198,12 +210,13 @@ function handleCallingSheetEdit(e, sheet) {
 
   // === ВЕТКА 0.5: 🛡️ ПРОХОД СЕКРЕТАРЯ (ВЫБИТЬ ЛПР) — Остается в «1. Обзвон (База)» на +2 рабочих дня без сжигания счетчика недозвонов! ===
   if (decision.includes("секретар") || decision.includes("выбить") || decision.includes("лпр")) {
-    const nextTryStr = getNextWorkingDateStr_(now, 2, timeZone);
+    const nextTryDate = getNextWorkingDateObj_(now, 2);
+    const nextTryStr  = Utilities.formatDate(nextTryDate, timeZone, "dd.MM.yyyy");
     const secTag = `[🛡️ Проход секретаря — выбить ЛПР${needSnapshot} - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, secTag);
 
     sheet.getRange(row, 14).setValue(updatedHistory);
-    sheet.getRange(row, 12).setValue(nextTryStr);
+    setDeadlineCellDate_(sheet, row, nextTryDate, false);
     sheet.getRange(row, 13).clearContent();
     if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
 
@@ -214,7 +227,8 @@ function handleCallingSheetEdit(e, sheet) {
 
   // === ВЕТКА 1А: 🔥 ГОРЯЩАЯ ЗАЯВКА (В ПРОСЧЕТ) — Из «1. Обзвон (База)» в «3. Лист ожидания» С СОХРАНЕНИЕМ H, I, J! ===
   if (decision.includes("горящ") || decision.includes("просчет") || decision.includes("просчёт") || decision.includes("заявк")) {
-    const nextCheckDate = getNextWorkingDateStr_(now, 1, timeZone);
+    const nextCheckDateObj = getNextWorkingDateObj_(now, 1);
+    const nextCheckDateStr = Utilities.formatDate(nextCheckDateObj, timeZone, "dd.MM.yyyy");
     const hotTag = `[🔥 Горящая заявка${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, hotTag);
     const liveNeed = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : "В просчете";
@@ -226,22 +240,23 @@ function handleCallingSheetEdit(e, sheet) {
       const mergeRes = insertOrMergeRowByInn_(targetSheet, [
         inn, company, city, lpr, phone, email,
         sphere, liveNeed, pipeType, application,
-        notes, nextCheckDate, "", updatedHistory
+        notes, nextCheckDateObj, "", updatedHistory
       ], companyNote);
+      setDeadlineCellDate_(targetSheet, mergeRes.row, nextCheckDateObj, false);
       updateSingleRowNeedHighlight_(targetSheet, mergeRes.row, liveNeed);
       refreshSingleRowTactic_(targetSheet, mergeRes.row);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
-      ss.toast(`🔥 «${company || inn}» перенесен в Ожидание с ГОРЯЩЕЙ заявкой (${liveNeed})! Дедлайн: ${nextCheckDate}.`, "🔥 Горящая заявка", 5);
+      ss.toast(`🔥 «${company || inn}» перенесен в Ожидание с ГОРЯЩЕЙ заявкой (${liveNeed})! Дедлайн: ${nextCheckDateStr}.`, "🔥 Горящая заявка", 5);
     } else {
       sheet.getRange(row, 8).setValue(liveNeed);
       sheet.getRange(row, 14).setValue(updatedHistory);
-      sheet.getRange(row, 12).setValue(nextCheckDate);
+      setDeadlineCellDate_(sheet, row, nextCheckDateObj, false);
       sheet.getRange(row, 13).clearContent();
       updateSingleRowNeedHighlight_(sheet, row, liveNeed);
       if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`🔥 Заявка (${liveNeed}) взята в просчет! Контроль: ${nextCheckDate}.`, "🔥 В просчете", 4);
+      ss.toast(`🔥 Заявка (${liveNeed}) взята в просчет! Контроль: ${nextCheckDateStr}.`, "🔥 В просчете", 4);
     }
     return;
   }
@@ -260,17 +275,18 @@ function handleCallingSheetEdit(e, sheet) {
 
     const tag = `[💰 Выставлен счет${needSnapshot} - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
-    const nextCheckDate = getNextWorkingDateStr_(now, 1, timeZone);
+    const nextCheckDateObj = getNextWorkingDateObj_(now, 1);
+    const nextCheckDateStr = Utilities.formatDate(nextCheckDateObj, timeZone, "dd.MM.yyyy");
     const liveNeed = (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : "По счету";
 
     sheet.getRange(row, 8).setValue(liveNeed);
     sheet.getRange(row, 14).setValue(updatedHistory);
-    sheet.getRange(row, 12).setValue(nextCheckDate);
+    setDeadlineCellDate_(sheet, row, nextCheckDateObj, false);
     sheet.getRange(row, 13).clearContent();
     updateSingleRowNeedHighlight_(sheet, row, liveNeed);
     if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
     moveRowToBottom_(sheet, row);
-    ss.toast(`«${company || inn}» -> Счет зафиксирован в Истории! Тактика переключена на дожим счета (${nextCheckDate}).`, "💰 Выставлен счет", 4);
+    ss.toast(`«${company || inn}» -> Счет зафиксирован в Истории! Тактика переключена на дожим счета (${nextCheckDateStr}).`, "💰 Выставлен счет", 4);
     return;
   }
 
@@ -284,13 +300,14 @@ function handleCallingSheetEdit(e, sheet) {
     const preservedHistory = history.replace(/\[📞 Недозвон:/gi, "[📞 Архивный недозвон:");
     const tag = `[♻️ Возврат из Архива в «${targetName}»${needSnapshot} - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(preservedHistory, tag);
-    const nextDate = getNextWorkingDateStr_(now, toWaiting ? 7 : 0, timeZone);
+    const nextDateObj = getNextWorkingDateObj_(now, toWaiting ? 7 : 0);
 
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
       inn, company, city, lpr, phone, email,
       sphere, toWaiting ? "Нет" : "", "", "",
-      notes, nextDate, "", updatedHistory
+      notes, nextDateObj, "", updatedHistory
     ], companyNote);
+    setDeadlineCellDate_(targetSheet, mergeRes.row, nextDateObj, false);
     updateSingleRowNeedHighlight_(targetSheet, mergeRes.row, toWaiting ? "Нет" : "");
     if (toWaiting) refreshSingleRowTactic_(targetSheet, mergeRes.row);
     sheet.deleteRow(row);
@@ -300,66 +317,76 @@ function handleCallingSheetEdit(e, sheet) {
 
   // === ВЕТКА 3А: ОПЕРАТИВНЫЙ ПЕРЕЗВОН СЕГОДНЯ / ЧЕРЕЗ 2 ЧАСА ===
   if (decision.includes("2 час") || decision.includes("два час") || decision.includes("перезвон") || decision.includes("сегодня")) {
-    const callbackTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const callbackTimeStr = Utilities.formatDate(callbackTime, timeZone, "HH:mm");
-    const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+    let callbackDateObj = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    // Если ты уже вручную поставил в L конкретное время на сегодня — сохраняем его!
+    if (existingDlObj.dateObj && existingDlObj.isoDate === Utilities.formatDate(now, timeZone, "yyyy-MM-dd") && existingDlObj.hasTime) {
+      callbackDateObj = existingDlObj.dateObj;
+    }
+    const chosenTimeStr = Utilities.formatDate(callbackDateObj, timeZone, "HH:mm");
+    const fullDispStr   = Utilities.formatDate(callbackDateObj, timeZone, "dd.MM.yyyy HH:mm");
 
-    const tag = `[⏰ Перезвонить после ${callbackTimeStr}${needSnapshot} - ${nowStr}]`;
+    const tag = `[⏰ Перезвонить после ${chosenTimeStr}${needSnapshot} - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
     sheet.getRange(row, 8).setValue(need);
     sheet.getRange(row, 14).setValue(updatedHistory);
-    sheet.getRange(row, 12).setValue(todayStr);
+    setDeadlineCellDate_(sheet, row, callbackDateObj, true);
     sheet.getRange(row, 13).clearContent();
     updateSingleRowNeedHighlight_(sheet, row, need);
     if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
 
     moveRowToBottom_(sheet, row);
-    ss.toast(`«${company || inn}» -> Перезвон после ${callbackTimeStr}. Строка убрана вниз таблицы!`, "⏰ Перезвон сегодня", 4);
+    ss.toast(`«${company || inn}» -> Перезвон: ${fullDispStr}. Строка убрана вниз таблицы!`, "⏰ Перезвон сегодня", 4);
     return;
   }
 
   // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
   if (decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер") || decision.includes("сезон")) {
-    const shiftDateStr = getNextWorkingDateStr_(now, 30, timeZone);
-    const finalDeadline = (formattedDeadline && formattedDeadline > getNextWorkingDateStr_(now, 2, timeZone))
-      ? formattedDeadline
-      : shiftDateStr;
+    const shiftDateObj = getNextWorkingDateObj_(now, 30);
+    const minWaitIso   = getNextWorkingDateIso_(now, 2, timeZone);
+    const useExisting  = (existingDlObj.dateObj && existingIsoDeadline > minWaitIso);
+    const finalDateObj = useExisting ? existingDlObj.dateObj : shiftDateObj;
+    const finalHasTime = useExisting ? existingDlObj.hasTime : false;
+    const finalDisp    = Utilities.formatDate(finalDateObj, timeZone, finalHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
-    const tag = `[🔄 Сдвиг / Купил у других${needSnapshot} (след. контакт: ${finalDeadline}) - ${nowStr}]`;
+    const tag = `[🔄 Сдвиг / Купил у других${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
     if (sheetName === "3. Лист ожидания") {
       sheet.getRange(row, 8).setValue("Нет").setBackground(null);
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
-      sheet.getRange(row, 12).setValue(finalDeadline);
+      setDeadlineCellDate_(sheet, row, finalDateObj, finalHasTime);
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос H+I+J сохранен в Историю (N), H сброшена в «Нет» (подсветка снята), тактика в O обновлена!`, "🔄 Сдвиг спроса", 5);
+      ss.toast(`Запрос H+I+J сохранен в Историю (N), H сброшена в «Нет» (I и J очищены), тактика в O обновлена!`, "🔄 Сдвиг спроса", 5);
     } else {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
       if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
       const mergeRes = insertOrMergeRowByInn_(targetSheet, [
         inn, company, city, lpr, phone, email,
         sphere, "Нет", "", "",
-        notes, finalDeadline, "", updatedHistory
+        notes, finalDateObj, "", updatedHistory
       ], companyNote);
+      setDeadlineCellDate_(targetSheet, mergeRes.row, finalDateObj, finalHasTime);
       targetSheet.getRange(mergeRes.row, 8).setBackground(null);
       refreshSingleRowTactic_(targetSheet, mergeRes.row);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
-      ss.toast(`«${company || inn}» переведён в Лист ожидания (дедлайн: ${finalDeadline})!`, "🔄 В Ожидание", 5);
+      ss.toast(`«${company || inn}» переведён в Лист ожидания (дедлайн: ${finalDisp})!`, "🔄 В Ожидание", 5);
     }
     return;
   }
 
   // === ВЕТКА 3В: В ОЖИДАНИЕ (НЕТ ПОТРЕБНОСТИ / РАЗВЕДКА ПРОФИЛЯ) ===
   if (decision.includes("ожидан") || decision.includes("подума") || decision.includes("спящ") || decision.includes("нет потребн")) {
-    const defaultWaitDeadline = getNextWorkingDateStr_(now, 14, timeZone);
-    const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
-    const targetDeadline = (formattedDeadline && formattedDeadline >= todayStr) ? formattedDeadline : defaultWaitDeadline;
+    const defaultWaitObj = getNextWorkingDateObj_(now, 14);
+    const todayIso = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+    const useExisting = (existingDlObj.dateObj && existingIsoDeadline >= todayIso);
+    const targetDateObj = useExisting ? existingDlObj.dateObj : defaultWaitObj;
+    const targetHasTime = useExisting ? existingDlObj.hasTime : false;
+    const targetDisp    = Utilities.formatDate(targetDateObj, timeZone, targetHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
     const reconSnap = buildNeedSnapshot_(need, pipeType, application, "Берут в работу");
     const tag = `[⏳ В Ожидание${reconSnap} (из «${sheetName}») - ${nowStr}]`;
@@ -369,11 +396,11 @@ function handleCallingSheetEdit(e, sheet) {
       sheet.getRange(row, 8).setValue("Нет").setBackground(null);
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
-      sheet.getRange(row, 12).setValue(targetDeadline);
+      setDeadlineCellDate_(sheet, row, targetDateObj, targetHasTime);
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Профиль H+I+J записан в Историю (N), H сброшена в «Нет», дедлайн: ${targetDeadline}`, "⏳ Ожидание", 4);
+      ss.toast(`Профиль H+I+J записан в Историю (N), H сброшена в «Нет» (I и J очищены), дедлайн: ${targetDisp}`, "⏳ Ожидание", 4);
       return;
     }
 
@@ -383,14 +410,15 @@ function handleCallingSheetEdit(e, sheet) {
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
       inn, company, city, lpr, phone, email,
       sphere, "Нет", "", "",
-      notes, targetDeadline, "", updatedHistory
+      notes, targetDateObj, "", updatedHistory
     ], companyNote);
+    setDeadlineCellDate_(targetSheet, mergeRes.row, targetDateObj, targetHasTime);
     targetSheet.getRange(mergeRes.row, 8).setBackground(null);
     refreshSingleRowTactic_(targetSheet, mergeRes.row);
     sheet.deleteRow(row);
     highlightDuplicateInnsOnSheet_(sheet);
     const msgAction = mergeRes.merged ? "объединён с карточкой" : "перенесён";
-    ss.toast(`«${company || inn}» ${msgAction} в Ожидание! Разведка (H+I+J) сохранена в Историю (N), H = «Нет».`, "⏳ В Ожидание", 5);
+    ss.toast(`«${company || inn}» ${msgAction} в Ожидание! Разведка (H+I+J) сохранена в Историю (N), H = «Нет», I и J очищены.`, "⏳ В Ожидание", 5);
     return;
   }
 
@@ -408,10 +436,11 @@ function handleCallingSheetEdit(e, sheet) {
     if (attempts < 4) {
       const stepDaysMap = { 1: 1, 2: 3, 3: 7 };
       const stepDays = stepDaysMap[attempts] || 1;
-      const nextCallStr = getNextWorkingDateStr_(now, stepDays, timeZone);
+      const nextCallDateObj = getNextWorkingDateObj_(now, stepDays);
+      const nextCallStr     = Utilities.formatDate(nextCallDateObj, timeZone, "dd.MM.yyyy");
 
       sheet.getRange(row, 14).setValue(updatedHistory);
-      sheet.getRange(row, 12).setValue(nextCallStr);
+      setDeadlineCellDate_(sheet, row, nextCallDateObj, false);
       sheet.getRange(row, 13).clearContent();
       if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
 
@@ -500,6 +529,7 @@ function cleanupRowIfCompletelyEmpty_(sheet, row, sheetName) {
   const maxCol = sheetName === "3. Лист ожидания" ? 15 : 14;
   sheet.getRange(row, 1, 1, maxCol).setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
   sheet.getRange(row, 2).setNote('');
+  sheet.getRange(row, 12).setNumberFormat('dd.MM.yyyy');
   if (sheetName === "3. Лист ожидания") {
     sheet.getRange(row, 15).clearContent();
   }
@@ -515,6 +545,7 @@ function handleMultiCellCrmEdit_(e, sheet) {
     if (!cleanupRowIfCompletelyEmpty_(sheet, r, sheetName)) {
       const hVal = String(sheet.getRange(r, 8).getValue() || '').trim();
       updateSingleRowNeedHighlight_(sheet, r, hVal);
+      updateSingleRowDeadlineHighlight_(sheet, r);
       if (sheetName === "3. Лист ожидания") {
         refreshSingleRowTactic_(sheet, r);
       }
@@ -967,7 +998,6 @@ function highlightDuplicateInnsOnSheet_(sheet, minRowToCover) {
   const innRange = sheet.getRange(2, 1, numRows, 1);
   const innValues = innRange.getValues();
   const counts = {};
-
   innValues.forEach(r => {
     const clean = String(r[0] || '').replace(/\D/g, '');
     if (clean.length >= 10) {
@@ -1055,12 +1085,23 @@ function prependHistoryLog_(existingHistory, newTag) {
   return `${newTag}\n${cleanHist}`;
 }
 
-function getNextWorkingDateStr_(baseDate, addDays, timeZone) {
+function getNextWorkingDateObj_(baseDate, addDays) {
   const nextDate = new Date(baseDate.getTime());
+  nextDate.setHours(0, 0, 0, 0);
   nextDate.setDate(nextDate.getDate() + addDays);
   if (nextDate.getDay() === 6) nextDate.setDate(nextDate.getDate() + 2);
   else if (nextDate.getDay() === 0) nextDate.setDate(nextDate.getDate() + 1);
+  return nextDate;
+}
+
+function getNextWorkingDateIso_(baseDate, addDays, timeZone) {
+  const nextDate = getNextWorkingDateObj_(baseDate, addDays);
   return Utilities.formatDate(nextDate, timeZone || "Europe/Moscow", "yyyy-MM-dd");
+}
+
+function getNextWorkingDateStr_(baseDate, addDays, timeZone) {
+  const nextDate = getNextWorkingDateObj_(baseDate, addDays);
+  return Utilities.formatDate(nextDate, timeZone || "Europe/Moscow", "dd.MM.yyyy");
 }
 
 function mergeUniqueLines_(existingStr, newStr, separator) {
@@ -1167,6 +1208,355 @@ function insertAndFormatRow_(targetSheet, rowValues) {
   targetRange.setBackground(null);
   targetSheet.getRange(targetRow, 1).setNumberFormat('@');
   targetSheet.getRange(targetRow, 5).setNumberFormat('@');
+  ensureDateValidationOnCell_(targetSheet.getRange(targetRow, 12));
   targetRange.setValues([rowValues]);
   return targetRow;
+}
+
+// =================================================================
+// НАСТОЯЩИЕ ДАТЫ (ВЫПАДАЮЩИЙ КАЛЕНДАРЬ) + ВРЕМЯ + ПОДСВЕТКА + АВТО-ПОДЪЕМ
+// =================================================================
+
+function ensureDateValidationOnCell_(range) {
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireDate()
+    .setAllowInvalid(true)
+    .build();
+  range.setDataValidation(rule);
+}
+
+function setDeadlineCellDate_(sheet, row, dateObj, hasTime) {
+  const cell = sheet.getRange(row, 12);
+  ensureDateValidationOnCell_(cell);
+  if (!dateObj) {
+    cell.clearContent();
+    cell.setNumberFormat("dd.MM.yyyy");
+    cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+    return;
+  }
+  cell.setNumberFormat(hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+  cell.setValue(dateObj);
+  updateSingleRowDeadlineHighlight_(sheet, row);
+}
+
+function extractBaseDateFromOldValue_(oldVal, timeZone) {
+  const now = new Date();
+  if (!oldVal) return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
+
+  const num = Number(String(oldVal).replace(',', '.'));
+  if (!isNaN(num) && num > 40000) {
+    const daySerial = Math.floor(num);
+    const ms = Math.round((daySerial - 25569) * 86400 * 1000);
+    const utc = new Date(ms);
+    return { y: utc.getUTCFullYear(), m: utc.getUTCMonth(), d: utc.getUTCDate() };
+  }
+
+  const parsedOld = parseDeadlineObj_(oldVal, timeZone);
+  if (parsedOld.dateObj) {
+    return {
+      y: parsedOld.dateObj.getFullYear(),
+      m: parsedOld.dateObj.getMonth(),
+      d: parsedOld.dateObj.getDate()
+    };
+  }
+
+  return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
+}
+
+/**
+ * Умный разбор ввода в ячейку L:
+ * - Если выбрана дата из выпадающего календаря -> сохраняет Date (dd.MM.yyyy).
+ * - Если поверх выбранной даты введено время ("14:30" или "14.30") -> приклеивает время к этой дате (dd.MM.yyyy HH:mm)!
+ */
+function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
+  const rawStr = rawEventVal !== undefined ? String(rawEventVal).trim() : "";
+
+  // 1. Если введено чистое время вида "14:30" или "14.30"
+  const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)$/);
+  if (timeMatch) {
+    const base = extractBaseDateFromOldValue_(rawOldVal, timeZone);
+    const hh = parseInt(timeMatch[1], 10);
+    const mm = parseInt(timeMatch[2], 10);
+    const combined = new Date(base.y, base.m, base.d, hh, mm, 0);
+    return parseDeadlineObj_(combined, timeZone);
+  }
+
+  // 2. Если Google Таблицы сами превратили ввод "14:30" в дату 30.12.1899 14:30
+  if (cellVal instanceof Date && !isNaN(cellVal.getTime()) && cellVal.getFullYear() === 1899) {
+    const base = extractBaseDateFromOldValue_(rawOldVal, timeZone);
+    const combined = new Date(base.y, base.m, base.d, cellVal.getHours(), cellVal.getMinutes(), 0);
+    return parseDeadlineObj_(combined, timeZone);
+  }
+
+  return parseDeadlineObj_(cellVal !== undefined && cellVal !== "" ? cellVal : rawStr, timeZone);
+}
+
+function parseDeadlineObj_(val, timeZone) {
+  const empty = { dateObj: null, isoDate: "", timeStr: "", hasTime: false, displayStr: "" };
+  if (val === null || val === undefined || val === "") return empty;
+  const tz = timeZone || "Europe/Moscow";
+  const now = new Date();
+
+  if (val instanceof Date && !isNaN(val.getTime())) {
+    if (val.getFullYear() === 1899) {
+      const combined = new Date(now.getFullYear(), now.getMonth(), now.getDate(), val.getHours(), val.getMinutes(), 0);
+      return parseDeadlineObj_(combined, tz);
+    }
+    const isoDate = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+    const ruDate  = Utilities.formatDate(val, tz, "dd.MM.yyyy");
+    const hhmm    = Utilities.formatDate(val, tz, "HH:mm");
+    const hasTime = (hhmm !== "00:00");
+    return {
+      dateObj: val,
+      isoDate: isoDate,
+      timeStr: hasTime ? hhmm : "",
+      hasTime: hasTime,
+      displayStr: hasTime ? `${ruDate} ${hhmm}` : ruDate
+    };
+  }
+
+  const s = String(val).trim();
+  if (!s) return empty;
+
+  // Введено только время ("14:30" или "14.30")
+  const timeOnlyMatch = s.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)$/);
+  if (timeOnlyMatch) {
+    const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeOnlyMatch[1], 10), parseInt(timeOnlyMatch[2], 10), 0);
+    return parseDeadlineObj_(dObj, tz);
+  }
+
+  // Формат ISO: "2026-10-21" или "2026-10-21 14:30"
+  const isoMatch = s.match(/^(\d{4})[\-\.](\d{1,2})[\-\.](\d{1,2})(?:[\sT,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
+  if (isoMatch) {
+    const y  = parseInt(isoMatch[1], 10);
+    const m  = parseInt(isoMatch[2], 10) - 1;
+    const d  = parseInt(isoMatch[3], 10);
+    const hh = isoMatch[4] !== undefined ? parseInt(isoMatch[4], 10) : 0;
+    const mm = isoMatch[5] !== undefined ? parseInt(isoMatch[5], 10) : 0;
+    return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
+  }
+
+  // Формат RU: "21.10.2026" или "21.10.2026 14:30"
+  const ruMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})[\.\-\/](\d{2,4})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
+  if (ruMatch) {
+    const d  = parseInt(ruMatch[1], 10);
+    const m  = parseInt(ruMatch[2], 10) - 1;
+    let y    = parseInt(ruMatch[3], 10);
+    if (y < 100) y += 2000;
+    const hh = ruMatch[4] !== undefined ? parseInt(ruMatch[4], 10) : 0;
+    const mm = ruMatch[5] !== undefined ? parseInt(ruMatch[5], 10) : 0;
+    return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
+  }
+
+  // Короткая дата: "21.10" или "21.10 14:30"
+  const shortRuMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?$/);
+  if (shortRuMatch) {
+    const d  = parseInt(shortRuMatch[1], 10);
+    const m  = parseInt(shortRuMatch[2], 10) - 1;
+    const y  = now.getFullYear();
+    const hh = shortRuMatch[3] !== undefined ? parseInt(shortRuMatch[3], 10) : 0;
+    const mm = shortRuMatch[4] !== undefined ? parseInt(shortRuMatch[4], 10) : 0;
+    return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
+  }
+
+  return empty;
+}
+
+function extractHistoryCallbackTime_(firstHistLine) {
+  if (!firstHistLine || !firstHistLine.includes('⏰')) return "";
+  const m = firstHistLine.match(/Перезвонить после\s*(\d{1,2}:\d{2})/i);
+  return m ? m[1].padStart(5, '0') : "";
+}
+
+function computeDeadlineStyle_(dlObj, todayStr, nowHHMM) {
+  if (!dlObj || !dlObj.isoDate) {
+    return { bg: null, color: '#0f172a', weight: 'normal' };
+  }
+  if (dlObj.isoDate < todayStr) {
+    // Просрочено (вчера и ранее) — мягкий красный
+    return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
+  }
+  if (dlObj.isoDate === todayStr) {
+    if (dlObj.timeStr && nowHHMM >= dlObj.timeStr) {
+      // Назначенное время сегодня уже наступило/прошло — пора звонить (красный сигнал)
+      return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
+    }
+    // Дедлайн на сегодня — жёлтый
+    return { bg: '#fef9c3', color: '#854d0e', weight: 'bold' };
+  }
+  // Будущая дата (> сегодня) — мягкий зелёный
+  return { bg: '#dcfce7', color: '#166534', weight: 'normal' };
+}
+
+function updateSingleRowDeadlineHighlight_(sheet, row, preParsedObj) {
+  if (!sheet || row < 2) return;
+  const ss = sheet.getParent();
+  const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
+  const now = new Date();
+  const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+  const nowHHMM  = Utilities.formatDate(now, timeZone, "HH:mm");
+
+  const cell = sheet.getRange(row, 12);
+  const dlObj = preParsedObj || parseDeadlineObj_(cell.getValue(), timeZone);
+  const st = computeDeadlineStyle_(dlObj, todayStr, nowHHMM);
+
+  cell.setBackground(st.bg).setFontColor(st.color).setFontWeight(st.weight);
+}
+
+function sortAndHighlightDeadlinesOnSheet_(sheet) {
+  if (!sheet) return;
+  const sheetName = sheet.getName().trim();
+  const allowedSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания"];
+  if (!allowedSheets.includes(sheetName)) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return;
+
+  const ss = sheet.getParent();
+  const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
+  const now = new Date();
+  const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+  const nowHHMM  = Utilities.formatDate(now, timeZone, "HH:mm");
+  const numCols = sheetName === "3. Лист ожидания" ? 15 : 14;
+  const numRows = lastRow - 1;
+
+  const fullRange = sheet.getRange(2, 1, numRows, numCols);
+  const allValues = fullRange.getValues();
+  const allNotes  = fullRange.getNotes();
+  const stockByDiam = getAvailableStockDiamsMap_(ss);
+
+  const items = [];
+
+  for (let i = 0; i < numRows; i++) {
+    const r = allValues[i];
+    const n = allNotes[i];
+    const hasData = r.slice(0, 14).some(c => c !== null && c !== undefined && String(c).trim() !== '');
+
+    if (!hasData) {
+      items.push({
+        origIdx: i,
+        isEmpty: true,
+        bucket: 99,
+        dStr: "9999-99-99",
+        tStr: "99:99",
+        dlObj: { dateObj: null, isoDate: "", timeStr: "", hasTime: false },
+        values: new Array(numCols).fill(""),
+        notes: new Array(numCols).fill("")
+      });
+      continue;
+    }
+
+    const dlObj = parseDeadlineObj_(r[11], timeZone);
+    r[11] = dlObj.dateObj ? dlObj.dateObj : "";
+
+    const needStr = String(r[7] || '').trim();
+    const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
+    const firstHist = String(r[13] || '').split('\n')[0] || '';
+    const isHotOrInvoice = isNeedActive || firstHist.includes('💰') || firstHist.includes('🔥');
+
+    const effectiveTime = dlObj.timeStr || extractHistoryCallbackTime_(firstHist);
+    const waitingForTimeToday = (dlObj.isoDate === todayStr) && effectiveTime && (nowHHMM < effectiveTime);
+
+    let bucket = 3; // Без дедлайна (свежая база)
+    if (dlObj.isoDate) {
+      if (dlObj.isoDate < todayStr) {
+        bucket = isHotOrInvoice ? 0 : 1; // Просроченные — самый верх
+      } else if (dlObj.isoDate === todayStr) {
+        if (waitingForTimeToday) {
+          bucket = 4; // Назначенное время сегодня еще не подошло — ждет внизу
+        } else {
+          bucket = isHotOrInvoice ? 0 : 2; // Дедлайн на сегодня (или время уже подошло) — наверх!
+        }
+      } else {
+        bucket = 5; // Будущие дедлайны (> сегодня) — в самом низу
+      }
+    } else if (isHotOrInvoice) {
+      bucket = 2;
+    }
+
+    if (sheetName === "3. Лист ожидания") {
+      r[14] = computeDynamicTacticForRow_(r, stockByDiam, n[1]);
+    }
+
+    items.push({
+      origIdx: i,
+      isEmpty: false,
+      bucket: bucket,
+      dStr: dlObj.isoDate || "",
+      tStr: effectiveTime || "",
+      dlObj: dlObj,
+      values: r,
+      notes: n
+    });
+  }
+
+  items.sort((a, b) => {
+    if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+    if (a.bucket === 1 || a.bucket === 5) {
+      if (a.dStr !== b.dStr) return a.dStr.localeCompare(b.dStr);
+    }
+    if ((a.bucket === 2 || a.bucket === 4) && a.tStr !== b.tStr) {
+      return (a.tStr || "00:00").localeCompare(b.tStr || "00:00");
+    }
+    return a.origIdx - b.origIdx;
+  });
+
+  const orderChanged = items.some((it, idx) => it.origIdx !== idx);
+  const dlRange = sheet.getRange(2, 12, numRows, 1);
+
+  // Возвращаем правило выпадающего календаря и формат настоящих дат на всю колонку L
+  ensureDateValidationOnCell_(dlRange);
+  const dlNumberFormats = items.map(it => [it.dlObj && it.dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
+
+  if (orderChanged) {
+    sheet.getRange(2, 1, numRows, 1).setNumberFormat('@');
+    sheet.getRange(2, 5, numRows, 1).setNumberFormat('@');
+    sheet.getRange(2, 8, numRows, 1).setNumberFormat('@');
+    dlRange.setNumberFormats(dlNumberFormats);
+
+    fullRange.setValues(items.map(it => it.values));
+    fullRange.setNotes(items.map(it => it.notes));
+  } else {
+    dlRange.setNumberFormats(dlNumberFormats);
+    dlRange.setValues(items.map(it => [it.values[11] || ""]));
+    if (sheetName === "3. Лист ожидания") {
+      sheet.getRange(2, 15, numRows, 1).setValues(items.map(it => [it.values[14] || ""]));
+    }
+  }
+
+  const needBgs = [];
+  const dlBgs = [];
+  const dlColors = [];
+  const dlWeights = [];
+
+  items.forEach(it => {
+    if (it.isEmpty) {
+      needBgs.push([null]);
+      dlBgs.push([null]);
+      dlColors.push(['#0f172a']);
+      dlWeights.push(['normal']);
+      return;
+    }
+
+    const needStr = String(it.values[7] || '').trim();
+    const isAct = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
+    if (isAct) {
+      const liveDiams = Array.from(new Set((needStr.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
+      needBgs.push([liveDiams.length > 0 ? '#dcfce7' : null]);
+    } else {
+      needBgs.push([null]);
+    }
+
+    const st = computeDeadlineStyle_(it.dlObj, todayStr, nowHHMM);
+    dlBgs.push([st.bg]);
+    dlColors.push([st.color]);
+    dlWeights.push([st.weight]);
+  });
+
+  sheet.getRange(2, 8, numRows, 1).setBackgrounds(needBgs);
+  dlRange.setBackgrounds(dlBgs);
+  dlRange.setFontColors(dlColors);
+  dlRange.setFontWeights(dlWeights);
+
+  highlightDuplicateInnsOnSheet_(sheet);
 }
