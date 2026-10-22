@@ -1265,30 +1265,49 @@ function extractBaseDateFromOldValue_(oldVal, timeZone) {
 
 /**
  * Умный разбор ввода в ячейку L:
- * - Если выбрана дата из выпадающего календаря -> сохраняет Date (dd.MM.yyyy).
- * - Если поверх выбранной даты введено время ("14:30" или "14.30") -> приклеивает время к этой дате (dd.MM.yyyy HH:mm)!
+ * - Двойной клик по календарю -> сохраняет Date (dd.MM.yyyy).
+ * - Быстрый ввод часа/времени на СЕГОДНЯ без календаря:
+ *   "15" -> Сегодня 15:00
+ *   "1530" или "15:30" или "15.30" -> Сегодня 15:30
  */
 function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
   const rawStr = rawEventVal !== undefined ? String(rawEventVal).trim() : "";
+  const now = new Date();
+  const tz = timeZone || "Europe/Moscow";
 
-  // 1. Если введено чистое время вида "14:30" или "14.30"
-  const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)$/);
+  // 1. Введено 1-2 цифры часа ("9", "15") -> Сегодня в 09:00 / 15:00
+  const hourOnlyMatch = rawStr.match(/^([01]?\d|2[0-3])\$/);
+  if (hourOnlyMatch) {
+    const hh = parseInt(hourOnlyMatch[1], 10);
+    const todayWithHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, 0, 0);
+    return parseDeadlineObj_(todayWithHour, tz);
+  }
+
+  // 2. Введено 3-4 цифры времени слитно ("930", "1530") -> Сегодня в 09:30 / 15:30
+  const fourDigitTime = rawStr.match(/^([01]?\d|2[0-3])([0-5]\d)\$/);
+  if (fourDigitTime) {
+    const hh = parseInt(fourDigitTime[1], 10);
+    const mm = parseInt(fourDigitTime[2], 10);
+    const todayWithTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
+    return parseDeadlineObj_(todayWithTime, tz);
+  }
+
+  // 3. Введено время через двоеточие или точку ("14:30" или "14.30") -> Сегодня в 14:30
+  const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)\$/);
   if (timeMatch) {
-    const base = extractBaseDateFromOldValue_(rawOldVal, timeZone);
     const hh = parseInt(timeMatch[1], 10);
     const mm = parseInt(timeMatch[2], 10);
-    const combined = new Date(base.y, base.m, base.d, hh, mm, 0);
-    return parseDeadlineObj_(combined, timeZone);
+    const todayWithTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
+    return parseDeadlineObj_(todayWithTime, tz);
   }
 
-  // 2. Если Google Таблицы сами превратили ввод "14:30" в дату 30.12.1899 14:30
+  // 4. Если Google Таблицы сами превратили ввод "14:30" в дату 30.12.1899 14:30
   if (cellVal instanceof Date && !isNaN(cellVal.getTime()) && cellVal.getFullYear() === 1899) {
-    const base = extractBaseDateFromOldValue_(rawOldVal, timeZone);
-    const combined = new Date(base.y, base.m, base.d, cellVal.getHours(), cellVal.getMinutes(), 0);
-    return parseDeadlineObj_(combined, timeZone);
+    const combined = new Date(now.getFullYear(), now.getMonth(), now.getDate(), cellVal.getHours(), cellVal.getMinutes(), 0);
+    return parseDeadlineObj_(combined, tz);
   }
 
-  return parseDeadlineObj_(cellVal !== undefined && cellVal !== "" ? cellVal : rawStr, timeZone);
+  return parseDeadlineObj_(cellVal !== undefined && cellVal !== "" ? cellVal : rawStr, tz);
 }
 
 function parseDeadlineObj_(val, timeZone) {
@@ -1318,14 +1337,24 @@ function parseDeadlineObj_(val, timeZone) {
   const s = String(val).trim();
   if (!s) return empty;
 
-  // Введено только время ("14:30" или "14.30")
-  const timeOnlyMatch = s.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)$/);
+  const hourOnlyMatch = s.match(/^([01]?\d|2[0-3])\$/);
+  if (hourOnlyMatch) {
+    const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(hourOnlyMatch[1], 10), 0, 0);
+    return parseDeadlineObj_(dObj, tz);
+  }
+
+  const fourDigitTime = s.match(/^([01]?\d|2[0-3])([0-5]\d)\$/);
+  if (fourDigitTime) {
+    const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(fourDigitTime[1], 10), parseInt(fourDigitTime[2], 10), 0);
+    return parseDeadlineObj_(dObj, tz);
+  }
+
+  const timeOnlyMatch = s.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)\$/);
   if (timeOnlyMatch) {
     const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeOnlyMatch[1], 10), parseInt(timeOnlyMatch[2], 10), 0);
     return parseDeadlineObj_(dObj, tz);
   }
 
-  // Формат ISO: "2026-10-21" или "2026-10-21 14:30"
   const isoMatch = s.match(/^(\d{4})[\-\.](\d{1,2})[\-\.](\d{1,2})(?:[\sT,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
   if (isoMatch) {
     const y  = parseInt(isoMatch[1], 10);
@@ -1336,7 +1365,6 @@ function parseDeadlineObj_(val, timeZone) {
     return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
   }
 
-  // Формат RU: "21.10.2026" или "21.10.2026 14:30"
   const ruMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})[\.\-\/](\d{2,4})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
   if (ruMatch) {
     const d  = parseInt(ruMatch[1], 10);
@@ -1348,8 +1376,7 @@ function parseDeadlineObj_(val, timeZone) {
     return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
   }
 
-  // Короткая дата: "21.10" или "21.10 14:30"
-  const shortRuMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?$/);
+  const shortRuMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?\$/);
   if (shortRuMatch) {
     const d  = parseInt(shortRuMatch[1], 10);
     const m  = parseInt(shortRuMatch[2], 10) - 1;
@@ -1373,18 +1400,14 @@ function computeDeadlineStyle_(dlObj, todayStr, nowHHMM) {
     return { bg: null, color: '#0f172a', weight: 'normal' };
   }
   if (dlObj.isoDate < todayStr) {
-    // Просрочено (вчера и ранее) — мягкий красный
     return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
   }
   if (dlObj.isoDate === todayStr) {
     if (dlObj.timeStr && nowHHMM >= dlObj.timeStr) {
-      // Назначенное время сегодня уже наступило/прошло — пора звонить (красный сигнал)
       return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
     }
-    // Дедлайн на сегодня — жёлтый
     return { bg: '#fef9c3', color: '#854d0e', weight: 'bold' };
   }
-  // Будущая дата (> сегодня) — мягкий зелёный
   return { bg: '#dcfce7', color: '#166534', weight: 'normal' };
 }
 
@@ -1426,6 +1449,8 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const stockByDiam = getAvailableStockDiamsMap_(ss);
 
   const items = [];
+  let hasStringDatesToConvert = false;
+  let tacticsChanged = false;
 
   for (let i = 0; i < numRows; i++) {
     const r = allValues[i];
@@ -1446,7 +1471,11 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
       continue;
     }
 
-    const dlObj = parseDeadlineObj_(r[11], timeZone);
+    const rawDlCell = r[11];
+    const dlObj = parseDeadlineObj_(rawDlCell, timeZone);
+    if (rawDlCell && !(rawDlCell instanceof Date) && dlObj.dateObj) {
+      hasStringDatesToConvert = true;
+    }
     r[11] = dlObj.dateObj ? dlObj.dateObj : "";
 
     const needStr = String(r[7] || '').trim();
@@ -1457,25 +1486,27 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     const effectiveTime = dlObj.timeStr || extractHistoryCallbackTime_(firstHist);
     const waitingForTimeToday = (dlObj.isoDate === todayStr) && effectiveTime && (nowHHMM < effectiveTime);
 
-    let bucket = 3; // Без дедлайна (свежая база)
+    let bucket = 3;
     if (dlObj.isoDate) {
       if (dlObj.isoDate < todayStr) {
-        bucket = isHotOrInvoice ? 0 : 1; // Просроченные — самый верх
+        bucket = isHotOrInvoice ? 0 : 1;
       } else if (dlObj.isoDate === todayStr) {
         if (waitingForTimeToday) {
-          bucket = 4; // Назначенное время сегодня еще не подошло — ждет внизу
+          bucket = 4;
         } else {
-          bucket = isHotOrInvoice ? 0 : 2; // Дедлайн на сегодня (или время уже подошло) — наверх!
+          bucket = isHotOrInvoice ? 0 : 2;
         }
       } else {
-        bucket = 5; // Будущие дедлайны (> сегодня) — в самом низу
+        bucket = 5;
       }
     } else if (isHotOrInvoice) {
       bucket = 2;
     }
 
     if (sheetName === "3. Лист ожидания") {
-      r[14] = computeDynamicTacticForRow_(r, stockByDiam, n[1]);
+      const newTactic = computeDynamicTacticForRow_(r, stockByDiam, n[1]);
+      if (String(r[14] || '') !== newTactic) tacticsChanged = true;
+      r[14] = newTactic;
     }
 
     items.push({
@@ -1504,11 +1535,10 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const orderChanged = items.some((it, idx) => it.origIdx !== idx);
   const dlRange = sheet.getRange(2, 12, numRows, 1);
 
-  // Возвращаем правило выпадающего календаря и формат настоящих дат на всю колонку L
-  ensureDateValidationOnCell_(dlRange);
-  const dlNumberFormats = items.map(it => [it.dlObj && it.dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
-
+  // Перезаписываем данные листа ТОЛЬКО если реально изменился порядок строк или нашлась текстовая дата
   if (orderChanged) {
+    ensureDateValidationOnCell_(dlRange);
+    const dlNumberFormats = items.map(it => [it.dlObj && it.dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
     sheet.getRange(2, 1, numRows, 1).setNumberFormat('@');
     sheet.getRange(2, 5, numRows, 1).setNumberFormat('@');
     sheet.getRange(2, 8, numRows, 1).setNumberFormat('@');
@@ -1517,9 +1547,13 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     fullRange.setValues(items.map(it => it.values));
     fullRange.setNotes(items.map(it => it.notes));
   } else {
-    dlRange.setNumberFormats(dlNumberFormats);
-    dlRange.setValues(items.map(it => [it.values[11] || ""]));
-    if (sheetName === "3. Лист ожидания") {
+    if (hasStringDatesToConvert) {
+      ensureDateValidationOnCell_(dlRange);
+      const dlNumberFormats = items.map(it => [it.dlObj && it.dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
+      dlRange.setNumberFormats(dlNumberFormats);
+      dlRange.setValues(items.map(it => [it.values[11] || ""]));
+    }
+    if (sheetName === "3. Лист ожидания" && tacticsChanged) {
       sheet.getRange(2, 15, numRows, 1).setValues(items.map(it => [it.values[14] || ""]));
     }
   }

@@ -539,15 +539,21 @@ function logClientPriceAction(payload) {
       const curHistory = String(targetSheet.getRange(client.row, 14).getValue() || '').trim();
       targetSheet.getRange(client.row, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-      const nextFollowUp = new Date();
-      nextFollowUp.setDate(nextFollowUp.getDate() + 2);
-      if (nextFollowUp.getDay() === 6) nextFollowUp.setDate(nextFollowUp.getDate() + 2);
-      if (nextFollowUp.getDay() === 0) nextFollowUp.setDate(nextFollowUp.getDate() + 1);
-      const nextFollowUpStr = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
+      const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+        ? getNextWorkingDateObj_(new Date(), 2)
+        : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
+      const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
       const curDeadline = targetSheet.getRange(client.row, 12).getValue();
-      if (!curDeadline) {
-        targetSheet.getRange(client.row, 12).setValue(nextFollowUpStr);
+      const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
+
+      // Ставим свежий контроль +2 раб. дня, если L пустая ИЛИ там дата раньше нового дедлайна
+      if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+        if (typeof setDeadlineCellDate_ === 'function') {
+          setDeadlineCellDate_(targetSheet, client.row, nextFollowUp, false);
+        } else {
+          targetSheet.getRange(client.row, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
+        }
       }
 
       if (client.sheet.trim() === "3. Лист ожидания" && typeof refreshSingleRowTactic_ === 'function') {
@@ -1082,15 +1088,20 @@ ${userSignature.html}
             const curHistory = String(targetSheet.getRange(client.row, 14).getValue() || '').trim();
             targetSheet.getRange(client.row, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-            const nextFollowUp = new Date();
-            nextFollowUp.setDate(nextFollowUp.getDate() + 2);
-            if (nextFollowUp.getDay() === 6) nextFollowUp.setDate(nextFollowUp.getDate() + 2);
-            if (nextFollowUp.getDay() === 0) nextFollowUp.setDate(nextFollowUp.getDate() + 1);
-            const nextFollowUpStr = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
+            const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+              ? getNextWorkingDateObj_(new Date(), 2)
+              : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
+            const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
             const curDeadline = targetSheet.getRange(client.row, 12).getValue();
-            if (!curDeadline) {
-              targetSheet.getRange(client.row, 12).setValue(nextFollowUpStr);
+            const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
+
+            if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+              if (typeof setDeadlineCellDate_ === 'function') {
+                setDeadlineCellDate_(targetSheet, client.row, nextFollowUp, false);
+              } else {
+                targetSheet.getRange(client.row, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
+              }
             }
 
             if (client.sheet.trim() === "3. Лист ожидания" && typeof refreshSingleRowTactic_ === 'function') {

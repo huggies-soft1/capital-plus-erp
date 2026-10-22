@@ -131,7 +131,7 @@
       <select id="newGost">
         <option value="Нефть">Нефть</option>
         <option value="Вода">Вода</option>
-        <option value="Метал">Метал</option>
+        <option value="Металл">Металл</option>
         <option value="Газ">Газ</option>
         <option value="Пар">Пар</option>
         <option value="ГОСТ 10704-91">ГОСТ 10704-91</option>
@@ -730,7 +730,11 @@
       if (cart.length === 0) return;
       let totalTn = 0;
       let totalSum = 0;
-      let lines = ["📋 *КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ (ООО «Капитал-Плюс»)*", "📍 Склад отгрузки: г. Воронеж", ""];
+      let lines = [
+        "КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ (ООО «КАПИТАЛ-ПЛЮС»)",
+        "Склад отгрузки: г. Воронеж",
+        ""
+      ];
 
       cart.forEach((item, i) => {
         totalTn += item.tons;
@@ -738,15 +742,17 @@
         const mStr = item.meters > 0 ? `${item.meters.toFixed(1)} м / ` : '';
         const gostStr = (item.gost && item.gost !== '—') ? `, ${item.gost}` : '';
         lines.push(
-          `${i + 1}. *${item.name}* (${item.category}, ${item.condition}${gostStr})\n` +
-          `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${item.dealPriceTn.toLocaleString('ru-RU')} ₽/тн = *${item.cost.toLocaleString('ru-RU')} ₽*`
+          `${i + 1}. ${item.name} (${item.category}, ${item.condition}${gostStr})\n` +
+          `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${item.dealPriceTn.toLocaleString('ru-RU')} ₽/тн = ${item.cost.toLocaleString('ru-RU')} ₽`
         );
       });
 
+      const cleanTruck = getTruckRecommendation(totalTn).replace(/^[^\s]+\s*/, '');
       lines.push("");
-      lines.push(`⚖️ *Общий вес:* ${totalTn.toFixed(3)} тн`);
-      lines.push(`💰 *Итого сумма:* ${totalSum.toLocaleString('ru-RU')} ₽`);
-      lines.push(`${getTruckRecommendation(totalTn)}`);
+      lines.push(`Общий вес: ${totalTn.toFixed(3)} тн`);
+      lines.push(`Итого с НДС 22%: ${totalSum.toLocaleString('ru-RU')} ₽`);
+      lines.push(`Транспорт: ${cleanTruck}`);
+      lines.push("Отдел продаж: +7 (906) 588-37-77 (Кирилл)");
 
       const text = lines.join("\n");
       const ta = document.createElement("textarea");
