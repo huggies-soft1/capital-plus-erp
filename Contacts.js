@@ -1,6 +1,7 @@
 /**
  * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ
- * Файл: Contacts.gs — Синхронизация с Контактами iPhone (People API) с защитой от лимитов квот
+ * Файл: Contacts.gs — Синхронизация с Контактами iPhone (People API)
+ * Без дублей компаний через «/» и без дублирования полей внутри карточки телефона.
  */
 
 function addSelectedRowToContacts() {
@@ -26,17 +27,18 @@ function addSelectedRowToContacts() {
     return;
   }
 
-  // 1. Считываем все 14 колонок (Единый стандарт A–N)
+  // 1. Считываем данные строки (A–N) + полное Досье из заметки ячейки B
   const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+  const bNoteRaw = String(sheet.getRange(row, 2).getNote() || '').trim();
+
   const inn        = String(rowVals[0] || '').trim(); // A: ИНН
   let company      = String(rowVals[1] || '').trim(); // B: Компания
-  const city       = String(rowVals[2] || '').trim(); // C: Город
+  const city       = String(rowVals[2] || '').trim(); // C: Город (адрес)
   const contactRaw = String(rowVals[3] || '').trim(); // D: ЛПР
   const phoneRaw   = String(rowVals[4] || '').trim(); // E: Телефон
-  const emailRaw   = String(rowVals[5] || '').trim(); // F: Email
+  const emailRaw   = String(rowVals[5] || '').trim(); // F: E-mail
   const sphere     = String(rowVals[6] || '').trim(); // G: Сфера
-  const need       = String(rowVals[7] || '').trim(); // H: Потребность
-  const notesRaw   = String(rowVals[10] || '').trim(); // K: Примечание
+  const kNoteRaw   = String(rowVals[10] || '').trim(); // K: Примечание
 
   company = typeof cleanCompanyName === 'function' ? cleanCompanyName(company) : company;
 
@@ -45,13 +47,14 @@ function addSelectedRowToContacts() {
     return;
   }
 
+  const cleanNotes = extractCleanNoteForContact_(bNoteRaw, kNoteRaw);
+
   const meta = {
     company: company,
     city: city,
     inn: inn,
     sphere: sphere,
-    need: need,
-    notes: notesRaw
+    notes: cleanNotes
   };
 
   // 2. Разбираем людей и телефоны
@@ -66,7 +69,6 @@ function addSelectedRowToContacts() {
     const allContacts = fetchAllGoogleContactsLive_();
     const resultsLog = [];
 
-    // Группируем профили, если они ведут в один и тот же существующий контакт (чтобы не бить по API дважды!)
     const updatesByResource = {};
     const newProfilesToCreate = [];
 
@@ -84,7 +86,6 @@ function addSelectedRowToContacts() {
             }
           };
         } else {
-          // Сливаем второй телефон/имя в тот же запрос
           if (profile.personName && !updatesByResource[rName].combinedProfile.personName.includes(profile.personName)) {
             updatesByResource[rName].combinedProfile.personName =
               [updatesByResource[rName].combinedProfile.personName, profile.personName].filter(Boolean).join(' / ');
@@ -99,7 +100,7 @@ function addSelectedRowToContacts() {
 
     let apiWriteCount = 0;
 
-    // 3. Выполняем обновления существующих контактов (по 1 запросу на уникальный контакт)
+    // 3. Обновление существующих контактов (с очисткой возможных старых дублей компаний через "/")
     Object.keys(updatesByResource).forEach(rName => {
       const entry = updatesByResource[rName];
       const mergeResult = mergeContactData_(entry.existing, entry.combinedProfile, meta);
@@ -120,7 +121,7 @@ function addSelectedRowToContacts() {
       resultsLog.push(`🔄 Обновлен: ${mergeResult.resource.names[0].givenName}`);
     });
 
-    // 4. Создаем новые контакты (если совпадений не нашлось)
+    // 4. Создание новых контактов
     newProfilesToCreate.forEach(profile => {
       if (apiWriteCount > 0) Utilities.sleep(1200);
 
@@ -144,8 +145,20 @@ function addSelectedRowToContacts() {
 }
 
 /**
- * Авто-повтор запроса при секундном лимите квоты Google (Resource has been exhausted)
+ * Достает чистый текст заметок о клиенте (без системной шапки Досье)
  */
+function extractCleanNoteForContact_(bNoteRaw, kNoteRaw) {
+  if (bNoteRaw) {
+    return bNoteRaw
+      .replace(/^🗂️\s*ДОСЬЕ КЛИЕНТА[^\n]*\n+/i, '')
+      .trim();
+  }
+  if (kNoteRaw) {
+    return kNoteRaw.replace(/^📌\s*/, '').trim();
+  }
+  return '';
+}
+
 function callPeopleApiWithRetry_(apiFunc) {
   const delays = [1500, 3000, 5000];
   for (let attempt = 0; attempt <= delays.length; attempt++) {
@@ -163,19 +176,16 @@ function callPeopleApiWithRetry_(apiFunc) {
   }
 }
 
-/**
- * Разбор ячейки ЛПР и Телефонов:
- * - Если несколько строк в ЛПР совпадают по числу со строками телефонов -> создает отдельные контакты на каждого ЛПР.
- * - Иначе -> привязывает все номера одному человеку / компании.
- */
 function buildPersonProfilesFromRow_(contactRaw, phoneRaw, emailRaw) {
   const contactLines = contactRaw.split(/\n+/).map(s => s.trim()).filter(Boolean);
   const rawPhoneLines = phoneRaw.split(/[\n;]+/).map(s => s.trim()).filter(Boolean);
-  const emails = emailRaw.split(/[,;\n\s]+/).map(e => e.trim()).filter(e => e && e.includes('@'));
+  const emails = Array.from(new Set(
+    emailRaw.split(/[,;\n\s]+/).map(e => e.trim()).filter(e => e && e.includes('@'))
+  ));
 
   const cleanPhones = [];
   rawPhoneLines.forEach(line => {
-    const matches = line.match(/(?:\+7|8|7)?[\s\-\.\(\)]*\d{3}[\s\-\.\(\)]*\d{3}[\s\-\.]*\d{2}[\s\-\.]*\d{2}|\d{10,11}/g) || [line];
+    const matches = line.match(/(?:\+7|8|7)?[\s\-\.\(\)]*\d{3,5}[\s\-\.\(\)]*\d{2,3}[\s\-\.]*\d{2}[\s\-\.]*\d{2}|\d{10,11}/g) || [line];
     matches.forEach(m => {
       const digits = m.replace(/\D/g, '');
       let formatted = '';
@@ -190,7 +200,6 @@ function buildPersonProfilesFromRow_(contactRaw, phoneRaw, emailRaw) {
     });
   });
 
-  // Если в ячейке ЛПР явно записано несколько человек с новой строки (по числу телефонов)
   if (contactLines.length > 1 && contactLines.length === cleanPhones.length) {
     return contactLines.map((personName, idx) => ({
       personName: personName,
@@ -199,7 +208,6 @@ function buildPersonProfilesFromRow_(contactRaw, phoneRaw, emailRaw) {
     }));
   }
 
-  // Один человек (или карточка компании) со всеми телефонами
   const singleName = contactLines.join(' / ');
   return [{
     personName: singleName,
@@ -215,7 +223,7 @@ function buildPersonProfilesFromRow_(contactRaw, phoneRaw, emailRaw) {
 }
 
 function createFreshContactResource_(profile, meta) {
-  const givenName = formatIphoneGivenName_(profile.personName, [meta.company]);
+  const givenName = formatIphoneGivenName_(profile.personName, meta.company);
   const bioText = buildCompanyNotesBlock_(meta);
 
   return {
@@ -229,87 +237,88 @@ function createFreshContactResource_(profile, meta) {
 }
 
 /**
- * Умное слияние данных + проверка, изменилось ли хоть что-то (чтобы не тратить квоту зря)
+ * Обновление контакта БЕЗ дублирования компаний через "/" и БЕЗ дублирования заметок
  */
 function mergeContactData_(existingContact, profile, meta) {
   const existingGiven = (existingContact.names && existingContact.names[0] && existingContact.names[0].givenName)
     ? existingContact.names[0].givenName.trim()
     : '';
 
-  let companiesList = [];
+  // Достаем старую компанию только на случай, если в таблице колонка компании пустая (берем строго первую до "/")
+  let existingSingleCompany = '';
   const bracketMatch = existingGiven.match(/\[([^\]]+)\]/);
   if (bracketMatch && bracketMatch[1]) {
-    companiesList = bracketMatch[1].split(/\s*\/\s*/).map(s => s.trim()).filter(Boolean);
-  } else if (existingContact.organizations && existingContact.organizations.length > 0) {
-    existingContact.organizations.forEach(org => {
-      if (org.name && !companiesList.includes(org.name.trim())) {
-        companiesList.push(org.name.trim());
-      }
-    });
+    existingSingleCompany = bracketMatch[1].split(/\s*\/\s*/)[0].trim();
+  } else if (existingContact.organizations && existingContact.organizations.length > 0 && existingContact.organizations[0].name) {
+    existingSingleCompany = existingContact.organizations[0].name.split(/\s*\/\s*/)[0].trim();
   }
 
-  if (meta.company) {
-    const normNew = meta.company.toLowerCase();
-    const alreadyHas = companiesList.some(c => c.toLowerCase() === normNew);
-    if (!alreadyHas) {
-      companiesList.push(meta.company);
-    }
-  }
+  // Строго ОДНА компания (никаких склеек через "/")
+  const finalCompany = meta.company || existingSingleCompany;
 
+  // Очищаем имя ЛПР от любых старых скобок [Компания]
   const existingPersonNameOnly = existingGiven.replace(/\s*\[[^\]]*\]/g, '').trim();
   const finalPersonName = profile.personName || existingPersonNameOnly;
-  const finalGivenName = formatIphoneGivenName_(finalPersonName, companiesList);
+  const finalGivenName = formatIphoneGivenName_(finalPersonName, finalCompany);
 
-  const mergedPhones = (existingContact.phoneNumbers || []).map(p => ({ value: p.value, type: p.type || 'work' }));
-  let phonesAdded = false;
-  profile.phones.forEach(newPh => {
-    const new10 = newPh.value.replace(/\D/g, '').slice(-10);
-    const exists = mergedPhones.some(oldPh => (oldPh.value || '').replace(/\D/g, '').slice(-10) === new10);
-    if (!exists && new10.length >= 7) {
-      mergedPhones.push(newPh);
-      phonesAdded = true;
+  // Телефоны без дублей
+  const mergedPhones = [];
+  const seenPhones10 = new Set();
+  const allCandidatePhones = (existingContact.phoneNumbers || []).concat(profile.phones || []);
+  allCandidatePhones.forEach(p => {
+    const val = String(p.value || '').trim();
+    const d10 = val.replace(/\D/g, '').slice(-10);
+    if (d10.length >= 7 && !seenPhones10.has(d10)) {
+      seenPhones10.add(d10);
+      mergedPhones.push({ value: val, type: p.type || (mergedPhones.length === 0 ? 'work' : 'mobile') });
     }
   });
 
-  const mergedEmails = (existingContact.emailAddresses || []).map(e => ({ value: e.value, type: e.type || 'work' }));
-  let emailsAdded = false;
-  profile.emails.forEach(newEm => {
-    const normEm = newEm.value.toLowerCase().trim();
-    const exists = mergedEmails.some(oldEm => (oldEm.value || '').toLowerCase().trim() === normEm);
-    if (!exists) {
-      mergedEmails.push(newEm);
-      emailsAdded = true;
+  // E-mail без дублей
+  const mergedEmails = [];
+  const seenEmails = new Set();
+  const allCandidateEmails = (existingContact.emailAddresses || []).concat(profile.emails || []);
+  allCandidateEmails.forEach(e => {
+    const val = String(e.value || '').trim();
+    const norm = val.toLowerCase();
+    if (norm && norm.includes('@') && !seenEmails.has(norm)) {
+      seenEmails.add(norm);
+      mergedEmails.push({ value: val, type: e.type || (mergedEmails.length === 0 ? 'work' : 'other') });
     }
   });
 
+  // Заметки (ИНН, Сфера, Примечание) — чистая перезапись актуальными данными без наслоения через "════"
   const existingBio = (existingContact.biographies && existingContact.biographies[0] && existingContact.biographies[0].value)
     ? existingContact.biographies[0].value.trim()
     : '';
   const newBlock = buildCompanyNotesBlock_(meta);
-  let finalBio = existingBio;
+  const finalBio = newBlock || existingBio;
 
-  if (newBlock) {
-    if (!existingBio) {
-      finalBio = newBlock;
-    } else if (meta.company && existingBio.includes(`Компания: ${meta.company}`)) {
-      const escapedComp = meta.company.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&');
-      const blockRegex = new RegExp(`(?:🏢 )?Компания: ${escapedComp}[\\s\\S]*?(?=\\n═|$)`, 'i');
-      finalBio = blockRegex.test(existingBio)
-        ? existingBio.replace(blockRegex, newBlock)
-        : existingBio + '\n════════════════════\n' + newBlock;
-    } else {
-      finalBio = existingBio + '\n════════════════════\n' + newBlock;
-    }
-  }
+  const existingOrgName = (existingContact.organizations && existingContact.organizations[0] && existingContact.organizations[0].name)
+    ? existingContact.organizations[0].name.trim()
+    : '';
+  const existingCity = (existingContact.addresses && existingContact.addresses[0] && existingContact.addresses[0].city)
+    ? existingContact.addresses[0].city.trim()
+    : '';
 
-  const hasChanges = (finalGivenName !== existingGiven) || phonesAdded || emailsAdded || (finalBio.trim() !== existingBio.trim());
+  const phonesChanged = mergedPhones.length !== (existingContact.phoneNumbers || []).length;
+  const emailsChanged = mergedEmails.length !== (existingContact.emailAddresses || []).length;
+  const orgChanged    = finalCompany !== existingOrgName || (existingContact.organizations || []).length > 1;
+  const cityChanged   = Boolean(meta.city && meta.city !== existingCity);
+
+  const hasChanges = (finalGivenName !== existingGiven) ||
+                     orgChanged ||
+                     cityChanged ||
+                     phonesChanged ||
+                     emailsChanged ||
+                     (finalBio !== existingBio);
 
   return {
     hasChanges: hasChanges,
     resource: {
       etag: existingContact.etag,
       names: [{ givenName: finalGivenName, familyName: '' }],
-      organizations: companiesList.map(cName => ({ name: cName, title: finalPersonName ? 'ЛПР' : 'Контакт' })),
+      organizations: finalCompany ? [{ name: finalCompany, title: finalPersonName ? 'ЛПР' : 'Контакт' }] : [],
       addresses: meta.city ? [{ city: meta.city, type: 'work' }] : (existingContact.addresses || []),
       emailAddresses: mergedEmails,
       phoneNumbers: mergedPhones,
@@ -318,22 +327,27 @@ function mergeContactData_(existingContact, profile, meta) {
   };
 }
 
-function formatIphoneGivenName_(personName, companiesList) {
-  const cleanCompanies = (companiesList || []).filter(Boolean).join(' / ');
-  if (personName && cleanCompanies) {
-    return `${personName} [${cleanCompanies}]`;
+/**
+ * Формат имени: строго "ЛПР [Компания]" (одна компания без "/")
+ */
+function formatIphoneGivenName_(personName, singleCompany) {
+  const cleanComp = String(singleCompany || '').trim();
+  const cleanPerson = String(personName || '').trim();
+  if (cleanPerson && cleanComp) {
+    return `${cleanPerson} [${cleanComp}]`;
   }
-  return personName || cleanCompanies || 'Контакт';
+  return cleanPerson || cleanComp || 'Контакт';
 }
 
+/**
+ * В Заметки карточки идут ТОЛЬКО те поля, которых нет в отдельных графах iPhone:
+ * Сфера, ИНН и Примечание (Компания и Город уже стоят в своих штатных полях карточки и не дублируются).
+ */
 function buildCompanyNotesBlock_(meta) {
   const lines = [];
-  if (meta.company) lines.push(`🏢 Компания: ${meta.company}`);
-  if (meta.sphere)  lines.push(`Сфера деятельности: ${meta.sphere}`);
-  if (meta.need)    lines.push(`Потребность: ${meta.need}`);
-  if (meta.city)    lines.push(`Город: ${meta.city}`);
-  if (meta.inn)     lines.push(`ИНН: ${meta.inn}`);
-  if (meta.notes)   lines.push(`Примечание: ${meta.notes}`);
+  if (meta.sphere) lines.push(`Сфера: ${meta.sphere}`);
+  if (meta.inn)    lines.push(`ИНН: ${meta.inn}`);
+  if (meta.notes)  lines.push(`Примечание:\n${meta.notes}`);
   return lines.join('\n');
 }
 
