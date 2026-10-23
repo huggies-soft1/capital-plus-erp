@@ -1,9 +1,9 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.4)
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.5 — HK Trader Desk)
  * Файл: Calling.gs — Маршрутизация лидов, скоростной парсер труб (53010 / 530*10 / 630 8),
- * 100% АВТОМАТИЧЕСКОЕ Досье (K -> Заметка B), мгновенный сброс подсветок на пустых ячейках,
- * авто-архивация H+I+J в Историю (N), ветка «Проход секретаря (Выбить ЛПР)» в Обзвоне,
- * живой мозг колонки O, ВЫПАДАЮЩИЙ КАЛЕНДАРЬ + КОРРЕКТИРОВКА ВРЕМЕНИ в L и авто-подъем очереди.
+ * 100% АВТОМАТИЧЕСКОЕ Досье (K -> Заметка B без обрезки смысла), сброс подсветок на пустых ячейках,
+ * авто-архивация H+I+J в Историю (N), живой мозг колонки O (Склад с тоннами/ценами + Транзит/Логистика
+ * + Гонконгский детектор блефа «В этом году не берут»), календарь + быстрое время (14 / 1430 / 14 30) в L.
  */
 
 const STANDARD_PIPE_DIAMS_ = [
@@ -132,8 +132,7 @@ function handleCallingSheetEdit(e, sheet) {
   }
 
   // =================================================================
-  // 2.9 ВЫПАДАЮЩИЙ КАЛЕНДАРЬ ДАТЫ + КОРРЕКТИРОВКА ВРЕМЕНИ (Колонка L / 12)
-  // Хранит настоящий объект Date, чтобы работал календарь по двойному клику!
+  // 2.9 ВЫПАДАЮЩИЙ КАЛЕНДАРЬ ДАТЫ + БЫСТРЫЙ ВВОД ВРЕМЕНИ (Колонка L / 12)
   // =================================================================
   if (col === 12) {
     const cell = sheet.getRange(row, 12);
@@ -155,7 +154,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  if (sheetName === "3. Лист ожидания" && (col === 7 || col === 9 || col === 10 || col === 14)) {
+  if (sheetName === "3. Лист ожидания" && (col === 3 || col === 6 || col === 7 || col === 9 || col === 10 || col === 14)) {
     refreshSingleRowTactic_(sheet, row);
     return;
   }
@@ -208,7 +207,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 0.5: 🛡️ ПРОХОД СЕКРЕТАРЯ (ВЫБИТЬ ЛПР) — Остается в «1. Обзвон (База)» на +2 рабочих дня без сжигания счетчика недозвонов! ===
+  // === ВЕТКА 0.5: 🛡️ ПРОХОД СЕКРЕТАРЯ (ВЫБИТЬ ЛПР) ===
   if (decision.includes("секретар") || decision.includes("выбить") || decision.includes("лпр")) {
     const nextTryDate = getNextWorkingDateObj_(now, 2);
     const nextTryStr  = Utilities.formatDate(nextTryDate, timeZone, "dd.MM.yyyy");
@@ -225,7 +224,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 1А: 🔥 ГОРЯЩАЯ ЗАЯВКА (В ПРОСЧЕТ) — Из «1. Обзвон (База)» в «3. Лист ожидания» С СОХРАНЕНИЕМ H, I, J! ===
+  // === ВЕТКА 1А: 🔥 ГОРЯЩАЯ ЗАЯВКА (В ПРОСЧЕТ) ===
   if (decision.includes("горящ") || decision.includes("просчет") || decision.includes("просчёт") || decision.includes("заявк")) {
     const nextCheckDateObj = getNextWorkingDateObj_(now, 1);
     const nextCheckDateStr = Utilities.formatDate(nextCheckDateObj, timeZone, "dd.MM.yyyy");
@@ -261,7 +260,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ (Работает в «3. Лист ожидания» и «2. Золотой список (Киты)») ===
+  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ ===
   if (decision.includes("выставлен счет") || decision.includes("счет") || decision.includes("счёт") || decision.includes("заказ")) {
     if (sheetName === "1. Обзвон (База)") {
       sheet.getRange(row, 13).clearContent();
@@ -318,7 +317,6 @@ function handleCallingSheetEdit(e, sheet) {
   // === ВЕТКА 3А: ОПЕРАТИВНЫЙ ПЕРЕЗВОН СЕГОДНЯ / ЧЕРЕЗ 2 ЧАСА ===
   if (decision.includes("2 час") || decision.includes("два час") || decision.includes("перезвон") || decision.includes("сегодня")) {
     let callbackDateObj = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    // Если ты уже вручную поставил в L конкретное время на сегодня — сохраняем его!
     if (existingDlObj.dateObj && existingDlObj.isoDate === Utilities.formatDate(now, timeZone, "yyyy-MM-dd") && existingDlObj.hasTime) {
       callbackDateObj = existingDlObj.dateObj;
     }
@@ -340,16 +338,19 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
-  if (decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер") || decision.includes("сезон")) {
-    const shiftDateObj = getNextWorkingDateObj_(now, 30);
+  // === ВЕТКА 3Б: ❄️ СЕЗОН ЗАКРЫТ / В ЭТОМ ГОДУ НЕ БЕРУТ / СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
+  const isSeasonClosed = decision.includes("сезон") || decision.includes("в этом году") || decision.includes("до весн") || decision.includes("след. год") || decision.includes("замороз");
+  if (isSeasonClosed || decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер")) {
+    const defaultShiftDays = isSeasonClosed ? 25 : 30;
+    const shiftDateObj = getNextWorkingDateObj_(now, defaultShiftDays);
     const minWaitIso   = getNextWorkingDateIso_(now, 2, timeZone);
     const useExisting  = (existingDlObj.dateObj && existingIsoDeadline > minWaitIso);
     const finalDateObj = useExisting ? existingDlObj.dateObj : shiftDateObj;
     const finalHasTime = useExisting ? existingDlObj.hasTime : false;
     const finalDisp    = Utilities.formatDate(finalDateObj, timeZone, finalHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
-    const tag = `[🔄 Сдвиг / Купил у других${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
+    const tagPrefix = isSeasonClosed ? `❄️ Сезон закрыт / В этом году всё (Проверка на блеф)` : `🔄 Сдвиг / Купил у других`;
+    const tag = `[${tagPrefix}${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
     if (sheetName === "3. Лист ожидания") {
@@ -360,7 +361,7 @@ function handleCallingSheetEdit(e, sheet) {
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос H+I+J сохранен в Историю (N), H сброшена в «Нет» (I и J очищены), тактика в O обновлена!`, "🔄 Сдвиг спроса", 5);
+      ss.toast(`Запрос H+I+J сохранен в Историю (N), H = «Нет», тактика в O переключена (контроль: ${finalDisp})!`, isSeasonClosed ? "❄️ Фоновый прогрев" : "🔄 Сдвиг спроса", 5);
     } else {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
       if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
@@ -595,6 +596,8 @@ function extractSmartSummaryFromNote_(latestText, fullDossierText) {
   const tags = [];
 
   if (/весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(lower))   tags.push('⚖️ ВЕСЫ: +10% на допуск!');
+  if (/в этом году|до весн|не сезон|сезон закрыт|след.*год|зимой не/i.test(lower)) tags.push('❄️ Сезон/Блеф?');
+  if (/не закуп|отказ|свой поставщ|берут у друг/i.test(lower))          tags.push('🛡️ Барьер/Свой поставщик');
   if (/тендер|торг|аукцион|закупк|44-фз|223-фз|аст|ртс/i.test(lower)) tags.push('🏛️ Тендеры');
   if (/аккредитац|реестр|сб\b|служб.*безопасн/i.test(lower))          tags.push('📑 Аккредитация');
   if (/отсрочк|постоплат|аванс|финансир|нет денег|бюджет/i.test(lower)) tags.push('💳 Финансы/Отсрочка');
@@ -602,14 +605,14 @@ function extractSmartSummaryFromNote_(latestText, fullDossierText) {
   if (/обсад|скважин|бур/i.test(lower))                              tags.push('💧 Обсадка/Бурение');
   if (/сваи|свай|опор|мост/i.test(lower))                            tags.push('🏗️ Сваи/Опоры');
 
-  const diams = Array.from(new Set((combinedSource.match(/\b\d{2,4}\b/g) || []).map(Number)))
-    .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
+  const diams = extractTruePipeDiamsFromText_(combinedSource);
   if (diams.length > 0) {
     tags.push(`Ø ${diams.slice(0, 5).join(',')}`);
   }
 
   const cleanLine = String(latestText || '').replace(/\n+/g, ' ').replace(/^📌\s*/, '').trim();
-  const shortPhrase = cleanLine.length > 48 ? cleanLine.slice(0, 45).trim() + '…' : cleanLine;
+  // Увеличен лимит до 110 символов, чтобы не обрезать смысл заметки на полслове!
+  const shortPhrase = cleanLine.length > 115 ? cleanLine.slice(0, 112).trim() + '…' : cleanLine;
 
   if (tags.length > 0) {
     return `📌 ${tags.join(' • ')} | ${shortPhrase}`;
@@ -636,9 +639,12 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
 }
 
 // =================================================================
-// ЖИВАЯ РОТАЦИЯ ТАКТИКИ ДОЖИМА (КОЛОНКА O В «3. ЛИСТ ОЖИДАНИЯ»)
+// МОЗГ ТОРГОВОГО ДЕСКА (КОЛОНКА O В «3. ЛИСТ ОЖИДАНИЯ» — СКЛАД + ТРАНЗИТ + БЛЕФ-ЧЕК)
 // =================================================================
 
+/**
+ * Считывает живой Склад вместе с тоннажем, состоянием и ценой ₽/тн по каждому диаметру
+ */
 function getAvailableStockDiamsMap_(ss) {
   const whSheet = getSheetByNameSafe(ss, 'Склад');
   const stockByDiam = {};
@@ -650,99 +656,199 @@ function getAvailableStockDiamsMap_(ss) {
     const stockTn = typeof safeParseFloat === 'function' ? safeParseFloat(r[10]) : parseFloat(r[10]) || 0;
     const stockM  = typeof safeParseFloat === 'function' ? safeParseFloat(r[11]) : parseFloat(r[11]) || 0;
     const diam    = Math.round(typeof safeParseFloat === 'function' ? safeParseFloat(r[3]) : parseFloat(r[3]) || 0);
+    const wall    = typeof safeParseFloat === 'function' ? safeParseFloat(r[4]) : parseFloat(r[4]) || 0;
+    const condRaw = String(r[2] || '').trim();
+    const priceTn = Math.round(typeof safeParseFloat === 'function' ? safeParseFloat(r[7]) : parseFloat(r[7]) || 0);
+
     if (status !== 'нет' && (stockTn > 0 || stockM > 0) && diam > 0) {
-      stockByDiam[diam] = true;
+      if (!stockByDiam[diam]) stockByDiam[diam] = [];
+      let condShort = 'Б/у';
+      const cl = condRaw.toLowerCase();
+      if (cl.includes('нов')) condShort = 'Нов.';
+      else if (cl.includes('леж')) condShort = 'Леж.';
+      else if (cl.includes('восст')) condShort = 'Восст.';
+
+      const tnStr = stockTn > 0 ? `${ Number(stockTn.toFixed(1)) }т` : `${ Math.round(stockM) }м`;
+      const prStr = priceTn > 0 ? ` по ${(priceTn / 1000).toFixed(0)}к` : '';
+      stockByDiam[diam].push(`${diam}х${wall} ${condShort} (${tnStr}${prStr})`);
     }
   });
   return stockByDiam;
 }
 
+/**
+ * Извлекает ТОЛЬКО реальные диаметры труб, игнорируя индексы, дома и случайные числа в тексте
+ */
+function extractTruePipeDiamsFromText_(text) {
+  if (!text) return [];
+  const clean = String(text)
+    // Убираем даты (19.10.2026) и время (14:26)
+    .replace(/\b\d{1,2}[\.\-\/]\d{1,2}[\.\-\/]\d{2,4}\b/g, ' ')
+    .replace(/\b\d{1,2}:\d{2}\b/g, ' ');
+
+  const found = [];
+  const matches = clean.match(/\b\d{2,4}\b/g) || [];
+  matches.forEach(m => {
+    const n = parseInt(m, 10);
+    if (STANDARD_PIPE_DIAMS_.includes(n) && !found.includes(n)) {
+      found.push(n);
+    }
+  });
+  return found;
+}
+
+function extractShortCityForTactic_(rawAddr) {
+  const s = String(rawAddr || '').trim();
+  if (!s) return '';
+  const gMatch = s.match(/(?:г\.|город)\s*([А-ЯЁа-яё\-]+(?:\s+[А-ЯЁа-яё\-]+)?)/i);
+  if (gMatch && gMatch[1]) return 'г. ' + gMatch[1].trim();
+  const oblMatch = s.match(/([А-ЯЁа-яё\-]+)\s+(?:обл|край|респ)/i);
+  if (oblMatch && oblMatch[1]) return oblMatch[1].trim();
+  const first = s.split(',')[0].replace(/^\d{6}\s*/, '').trim();
+  return first.length > 22 ? '' : first;
+}
+
 function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
+  const cityRaw = String(rowVals[2] || '').trim();
+  const email   = String(rowVals[5] || '').trim();
   const sphere  = String(rowVals[6] || '').trim();
   const need    = String(rowVals[7] || '').trim();
+  const pType   = String(rowVals[8] || '').trim();
+  const pApp    = String(rowVals[9] || '').trim();
   const notes   = String(rowVals[10] || '').trim();
   const history = String(rowVals[13] || '').trim();
   const dossier = String(companyDossierNote || '').trim();
 
-  const allContext = `${notes} ${dossier} ${history}`;
+  const shortCity = extractShortCityForTactic_(cityRaw);
+  const cityTag   = shortCity ? ` [${shortCity}]` : '';
+  const hasEmail  = email.includes('@');
+
+  const allContext = `${need} ${pType} ${pApp} ${notes} ${dossier} ${history}`;
   const allLower   = allContext.toLowerCase();
 
   const needLower = need.toLowerCase();
   const hasActiveNeed = need !== '' && needLower !== 'нет' && needLower !== '—' && needLower !== '-';
 
-  const firstHistoryLine = (history.split('\n')[0] || '').trim();
+  const historyLines = history.split('\n').map(s => s.trim()).filter(Boolean);
+  const firstHistoryLine = historyLines[0] || '';
+  const touchCount = historyLines.length;
 
   const isScaleClient = /весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(allLower);
-  const scaleWarnTag  = isScaleClient ? ' [⚖️ ВЕСЫ: +10% к цене на допуск!]' : '';
+  const scaleWarnTag  = isScaleClient ? ' [⚖️ ВЕСЫ: +10% на допуск!]' : '';
 
+  // 1. ПРИОРИТЕТ №1: ДОЖИМ ВЫСТАВЛЕННОГО СЧЕТА
   if (firstHistoryLine.includes('💰') || firstHistoryLine.toLowerCase().includes('выставлен счет')) {
     const targetPipe = hasActiveNeed ? ` (${need})` : '';
-    return `💰 ДОЖИМ СЧЕТА${targetPipe}: узнать проходную цену конкурента / дожать по теоретич. весу${scaleWarnTag}`;
+    return `💰 ДОЖИМ СЧЕТА${targetPipe}${cityTag}: узнать проходную цену конкурентов / подтвердить дату оплаты${scaleWarnTag}`;
   }
 
+  // 2. ПРИОРИТЕТ №2: ЖИВАЯ ЗАЯВКА В КОЛОНКЕ H (Склад vs Транзит + Логистика)
   if (hasActiveNeed) {
-    const liveDiams = Array.from(new Set((need.match(/\b\d{2,4}\b/g) || []).map(Number)));
-    const inStock = liveDiams.filter(d => stockByDiam[d]);
-    if (inStock.length > 0) {
-      return `🔥 ГОРЯЩАЯ ЗАЯВКА (${need}): Ø ${inStock.join(', ')} ЕСТЬ НА СКЛАДЕ — дать цену (по теории) и выставить счет!${scaleWarnTag}`;
+    const liveDiams = extractTruePipeDiamsFromText_(need);
+    const inStockDetails = [];
+    liveDiams.forEach(d => {
+      if (stockByDiam[d] && stockByDiam[d].length > 0) {
+        inStockDetails.push(stockByDiam[d].slice(0, 2).join(', '));
+      }
+    });
+
+    if (inStockDetails.length > 0) {
+      return `🔥 НА СКЛАДЕ ПОД ЗАЯВКУ (${need})${cityTag}: есть ${inStockDetails.join(' | ')} — дать цену + расчет машины и закрыть в Счет!${scaleWarnTag}`;
     }
-    return `🔥 ГОРЯЩАЯ ЗАЯВКА (${need}): просчитать транзит + доставку (CPT) за 15 мин и выставить счет${scaleWarnTag}`;
+    return `🌐 ТРАНЗИТ В ПРОСЧЕТ (${need})${cityTag}: нет на базе Воронеж — пробить Закупку у поставщиков + попутную фуру (CPT) за 15 мин!${scaleWarnTag}`;
   }
 
+  // 3. ПРИОРИТЕТ №3: ПРОБИВ НЕДОЗВОНА ИЛИ СЕКРЕТАРЯ
   const missMatch = firstHistoryLine.match(/Недозвон:\s*(\d+)\/4/i);
   if (missMatch) {
     const att = parseInt(missMatch[1], 10);
-    if (att === 1) return `📲 После недозвона (1/4): набрать повторно в другое время дня`;
-    if (att === 2) return `💬 После недозвона (2/4): скинуть короткий пинг в WhatsApp / Telegram ЛПР`;
-    return `⚠️ Недозвон (3/4 — последний шанс): пробить через общий номер / почту перед Архивом`;
+    if (att === 1) return `📲 После недозвона (1/4): набрать в другое время дня (утро до планерки / после 15:00)`;
+    if (att === 2) return `💬 После недозвона (2/4): скинуть короткий пинг в WhatsApp / Telegram на мобильный ЛПР`;
+    return `⚠️ Недозвон (3/4 — последний шанс): пробить через ПТО / снабжение перед Архивом`;
   }
 
-  const shiftCount = (history.match(/🔄|Сдвиг|⏳|💰/gi) || []).length;
-  const kpSent     = /📧|💬|📄|Прайс|КП/i.test(history) || /кп|прайс/i.test(allLower);
-
-  const pastDiams = Array.from(new Set((allContext.match(/\b\d{2,4}\b/g) || []).map(Number)))
-    .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
-  const stockHits = pastDiams.filter(d => stockByDiam[d]);
-
-  if (stockHits.length > 0) {
-    const stockStr = `Ø ${stockHits.slice(0, 4).join(', ')}`;
-    const mode = shiftCount % 3;
-    if (mode === 0) {
-      return `🎯 СНАЙПЕР СКЛАДА: в наличии их калибр (${stockStr}) — предложить живой объем со склада Воронеж${scaleWarnTag}`;
-    } else if (mode === 1) {
-      return `📉 АРБИТРАЖ СО СКЛАДА (${stockStr}): предложить партию под экономию сметы (восст./лежалая) с доставкой${scaleWarnTag}`;
+  // 4. ПРИОРИТЕТ №4: ГОНКОНГСКИЙ ПРОТОКОЛ «В ЭТОМ ГОДУ УЖЕ НИЧЕГО НЕ БУДЕТ / СЕЗОН ЗАКРЫТ» (ПРОВЕРКА НА БЛЕФ vs ФОН)
+  const isOffSeasonOrBluff = /❄️|в этом году|до весн|не сезон|сезон закрыт|след.*год|зимой не|объектов нет до/i.test(allLower);
+  if (isOffSeasonOrBluff) {
+    const bluffStep = touchCount % 3;
+    if (bluffStep === 0) {
+      return `🕵️ ПРОВЕРКА НА БЛЕФ («В этом году всё»)${cityTag}: пробить по ИНН активные тендеры + скинуть в WA 1 позицию ниже рынка (если врут и берут у других — клюнут!)`;
+    } else if (bluffStep === 1) {
+      return `💰 КОНЕЦ ГОДА / БАРТЕР${cityTag}: предложить освоить остаток годового бюджета (счет сейчас + зимнее хранение у нас до весны) ИЛИ выкупить их остатки трубы с базы!`;
     } else {
-      return `🚛 БРОНЬ СО СКЛАДА (${stockStr}): узнать старт работ и предложить фиксацию цены до подорожания${scaleWarnTag}`;
+      return `📐 ЗАХОД В ВЕСЕННЮЮ СМЕТУ${cityTag}: забрать спецификацию будущих объектов сейчас — заложить нашу лежалую/восст. вместо новой трубы (-25% к смете)!`;
     }
   }
 
-  if (/аккредитац|реестр|служб.*безопасн/i.test(allLower) && shiftCount % 2 === 0) {
-    return `📑 ДОСЬЕ (Аккредитация): проверить статус проверки наших документов в СБ и зайти в реестр поставщиков`;
-  }
-  if (/тендер|торг|аукцион|44-фз|223-фз|аст/i.test(allLower) && shiftCount % 2 === 0) {
-    return `🏛️ ДОСЬЕ (Тендеры): запросить спецификацию ближайшего тендера — посчитать трубу со стенкой в допуске ГОСТ под проходную цену`;
-  }
-  if (/не финансир|нет денег|ждут аванс|задерж/i.test(allLower) && shiftCount % 2 === 0) {
-    return `💳 ДОСЬЕ (Финансирование): проверить, пошел ли транш от заказчика / предложить поставку мелкими партиями`;
+  // 5. ПРИОРИТЕТ №5: СНАЙПЕР СКЛАДА (По прошлым диаметрам из Истории N и Досье B/K)
+  const pastDiams = extractTruePipeDiamsFromText_(`${notes} ${dossier} ${history}`);
+  const matchedStockList = [];
+  pastDiams.forEach(d => {
+    if (stockByDiam[d] && stockByDiam[d].length > 0) {
+      matchedStockList.push(stockByDiam[d][0]);
+    }
+  });
+
+  if (matchedStockList.length > 0) {
+    const stockSummary = matchedStockList.slice(0, 2).join('; ');
+    const sniperMode = touchCount % 3;
+    if (sniperMode === 0) {
+      return `🎯 СНАЙПЕР СКЛАДА${cityTag}: под их профиль в наличии ${stockSummary} — предложить живой объем с базы Воронеж${scaleWarnTag}`;
+    } else if (sniperMode === 1) {
+      return `🚛 ПОПУТКА / ДОГРУЗ СО СКЛАДА${cityTag}: идет машина в их сторону — предложить закинуть ${stockSummary} по цене попутки${scaleWarnTag}`;
+    } else {
+      return `📉 АРБИТРАЖ СМЕТЫ СО СКЛАДА${cityTag}: предложить партию ${stockSummary} под экономию бюджета или выкупить их деловые остатки${scaleWarnTag}`;
+    }
   }
 
-  if (!kpSent) {
-    return `📧 ШАГ 1 (Якорь): выслать Прайс + Карточку компании (закрепить контакт снабженца)`;
+  // 6. ПРИОРИТЕТ №6: СПЕЦ-СИГНАЛЫ ИЗ ДОСЬЕ КЛИЕНТА (Отказ снабженца, Тендеры, Аккредитация, Финансы)
+  if (/не закуп|жесткий отказ|свой поставщ|берут у друг/i.test(allLower)) {
+    return `🛡️ ОБХОД СНАБЖЕНЦА${cityTag}: снабженец блокирует — выйти напрямую на гл. инженера / начальника участка или дать проходную цену как 2-й резервный поставщик`;
+  }
+  if (/аккредитац|реестр|служб.*безопасн/i.test(allLower) && touchCount % 2 === 0) {
+    return `📑 АККРЕДИТАЦИЯ В СБ: проверить статус проверки наших уставных документов и зайти в закрытый реестр поставщиков`;
+  }
+  if (/тендер|торг|аукцион|44-фз|223-фз|аст/i.test(allLower) && touchCount % 2 === 0) {
+    return `🏛️ ТЕНДЕРНЫЙ ДЕСК: запросить ТЗ ближайшего тендера — дать проходную цену за счет стенки в минусовом допуске ГОСТ или восстановки`;
+  }
+  if (/не финансир|нет денег|ждут аванс|задерж/i.test(allLower) && touchCount % 2 === 0) {
+    return `💳 ФИНАНСЫ / ТРАНШ: проверить приход аванса от заказчика / предложить отгрузку частями (по 5–10 тн) или бартер на их лежалые остатки`;
   }
 
-  if (pastDiams.length === 0 && !sphere) {
-    return `🎯 ШАГ 2 (Разведка): проверить получение КП, выбить рабочие Ø и профиль объектов`;
+  // 7. ПРИОРИТЕТ №7: ОТРАСЛЕВОЙ ЗАХОД ПО СФЕРЕ (Колонка G) + АКТИВНАЯ РОТАЦИЯ (Без вечного зависания на Шаге 1!)
+  const kpSent = /📧|💬|📄|Прайс|КП/i.test(history) || /кп|прайс/i.test(allLower);
+
+  // Шаг 1 показываем ТОЛЬКО если с клиентом еще вообще не было касаний и не отправлялся прайс
+  if (!kpSent && touchCount === 0 && !notes) {
+    if (hasEmail) {
+      return `📧 ШАГ 1 (Якорь на Email)${cityTag}: выслать Прайс + Карточку компании и узнать рабочие Ø`;
+    }
+    return `💬 ШАГ 1 (Якорь в WhatsApp/TG)${cityTag}: нет почты в F — скинуть визитку и наличие в мессенджер ЛПР + выбить рабочий Email`;
   }
 
-  const rotationStep = shiftCount % 4;
-  if (rotationStep === 0) {
-    return `📞 ШАГ 2 (Объекты): КП у них — узнать график ближайших объектов и забрать спецификацию на просчет`;
-  } else if (rotationStep === 1) {
-    return `📉 ШАГ 3 (Ценовой повод): зайти через движение цен / предложить замену новой трубы на лежалую или восст.`;
-  } else if (rotationStep === 2) {
-    return `🚛 ШАГ 4 (Логистика CPT): предложить расчет транзитной партии с доставкой попутной фурой до их объекта`;
+  // Если известна Сфера (G), но еще не выбиты точные диаметры — бьем калибрами со склада под их отрасль!
+  if (pastDiams.length === 0 && sphere) {
+    const sphLower = sphere.toLowerCase();
+    if (sphLower.includes('бур') || sphLower.includes('гнб')) {
+      return `💧 ПОД БУРЕНИЕ / ГНБ${cityTag}: предложить со склада НКТ 73, 89 и обсадную/футляры 168–325 мм (узнать текущие буровые установки)`;
+    }
+    if (sphLower.includes('дорож') || sphLower.includes('мост')) {
+      return `🏗️ ПОД ДРСУ / МОСТЫ${cityTag}: предложить трубу под водопропускные гильзы, сваи и проколы Ø 325–820 мм + выкуп их остатков с базы`;
+    }
+    if (sphLower.includes('строит') || sphLower.includes('пгс')) {
+      return `🏢 ПОД СТРОЙКУ (ПГС)${cityTag}: предложить трубу под сваи, футляры коммуникаций и распорки котлованов (лежалая/восст. со склада)`;
+    }
+  }
+
+  const rot = touchCount % 4;
+  if (rot === 0) {
+    return `🎯 РАЗВЕДКА КАЛИБРОВ${cityTag}: выбить рабочие Ø, допуск по б/у-восстановке и график ближайших объектов`;
+  } else if (rot === 1) {
+    return `📉 ЗАМЕНА НОВОЙ НА ЛЕЖАК/ВОССТ.${cityTag}: предложить пересогласовать трубу в смете на нашу лежалую или восстановленную (-25% к бюджету)`;
+  } else if (rot === 2) {
+    return `♻️ ОБРАТНЫЙ ВЫКУП / ДОГРУЗ${cityTag}: спросить, нет ли на их базе невостребованных остатков трубы на выкуп/обмен + предложить попутную доставку`;
   } else {
-    return `🤝 ШАГ 5 (Расширение ЛПР): выйти на главного инженера / ПТО, проверить потребность под сваи/футляры/опоры`;
+    return `🤝 ВЫХОД НА ПТО / ГЛ. ИНЖЕНЕРА${cityTag}: узнать контакт ПТО или механика, забрать спецификацию под сваи/футляры/опоры на просчет`;
   }
 }
 
@@ -875,7 +981,7 @@ function matchWarehouseWithWaitingList() {
       const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
 
       if (isNeedActive) {
-        const liveDiams = Array.from(new Set((needStr.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
+        const liveDiams = extractTruePipeDiamsFromText_(needStr).filter(d => stockByDiam[d]);
         if (liveDiams.length > 0) {
           needBgColors.push(['#dcfce7']);
           hotMatches.push(
@@ -888,8 +994,7 @@ function matchWarehouseWithWaitingList() {
       needBgColors.push([null]);
 
       const combinedPast = `${histStr} ${notes} ${dossier}`;
-      const pastDiams = Array.from(new Set((combinedPast.match(/\b\d{2,4}\b/g) || []).map(Number)))
-        .filter(d => STANDARD_PIPE_DIAMS_.includes(d) && stockByDiam[d]);
+      const pastDiams = extractTruePipeDiamsFromText_(combinedPast).filter(d => stockByDiam[d]);
 
       if (pastDiams.length > 0) {
         historyMatches.push(
@@ -910,11 +1015,11 @@ function matchWarehouseWithWaitingList() {
     const more = allMatches.length > 14 ? `\n...и ещё ${allMatches.length - 14} совпадений!` : '';
     SpreadsheetApp.getUi().alert(
       `🎯 Биржевой радар: Горячих в H (${hotMatches.length}) | По Истории и Досье (${historyMatches.length})`,
-      `Колонка O (Чем дожимать) обновлена! Зелёным в H подсвечены только живые заявки, пустые/«Нет» очищены от подсветки:\n\n${preview}${more}`,
+      `Колонка O (Чем дожимать) обновлена со свежими тоннами и ценами со Склада!\n\n${preview}${more}`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
   } else {
-    ss.toast('Колонка O обновлена, залипшие подсветки в H очищены!', '🔍 Радар обновлен', 5);
+    ss.toast('Колонка O обновлена со свежими данными Склада!', '🔍 Радар обновлен', 5);
   }
 }
 
@@ -1214,7 +1319,7 @@ function insertAndFormatRow_(targetSheet, rowValues) {
 }
 
 // =================================================================
-// НАСТОЯЩИЕ ДАТЫ (ВЫПАДАЮЩИЙ КАЛЕНДАРЬ) + ВРЕМЯ + ПОДСВЕТКА + АВТО-ПОДЪЕМ
+// НАСТОЯЩИЕ ДАТЫ (ВЫПАДАЮЩИЙ КАЛЕНДАРЬ) + БЫСТРОЕ ВРЕМЯ (14 / 1430 / 14 30) + АВТО-ПОДЪЕМ
 // =================================================================
 
 function ensureDateValidationOnCell_(range) {
@@ -1239,70 +1344,36 @@ function setDeadlineCellDate_(sheet, row, dateObj, hasTime) {
   updateSingleRowDeadlineHighlight_(sheet, row);
 }
 
-function extractBaseDateFromOldValue_(oldVal, timeZone) {
-  const now = new Date();
-  if (!oldVal) return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
-
-  const num = Number(String(oldVal).replace(',', '.'));
-  if (!isNaN(num) && num > 40000) {
-    const daySerial = Math.floor(num);
-    const ms = Math.round((daySerial - 25569) * 86400 * 1000);
-    const utc = new Date(ms);
-    return { y: utc.getUTCFullYear(), m: utc.getUTCMonth(), d: utc.getUTCDate() };
-  }
-
-  const parsedOld = parseDeadlineObj_(oldVal, timeZone);
-  if (parsedOld.dateObj) {
-    return {
-      y: parsedOld.dateObj.getFullYear(),
-      m: parsedOld.dateObj.getMonth(),
-      d: parsedOld.dateObj.getDate()
-    };
-  }
-
-  return { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
-}
-
-/**
- * Умный разбор ввода в ячейку L:
- * - Двойной клик по календарю -> сохраняет Date (dd.MM.yyyy).
- * - Быстрый ввод часа/времени на СЕГОДНЯ без календаря:
- *   "15" -> Сегодня 15:00
- *   "1530" или "15:30" или "15.30" -> Сегодня 15:30
- */
 function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
   const rawStr = rawEventVal !== undefined ? String(rawEventVal).trim() : "";
   const now = new Date();
   const tz = timeZone || "Europe/Moscow";
 
-  // 1. Введено 1-2 цифры часа ("9", "15") -> Сегодня в 09:00 / 15:00
-  const hourOnlyMatch = rawStr.match(/^([01]?\d|2[0-3])\$/);
+  // 1. Введено 1-2 цифры часа ("9", "14") -> Сегодня в 09:00 / 14:00
+  const hourOnlyMatch = rawStr.match(/^([01]?\d|2[0-3])$/);
   if (hourOnlyMatch) {
     const hh = parseInt(hourOnlyMatch[1], 10);
-    const todayWithHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, 0, 0);
-    return parseDeadlineObj_(todayWithHour, tz);
+    return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, 0, 0), tz);
   }
 
-  // 2. Введено 3-4 цифры времени слитно ("930", "1530") -> Сегодня в 09:30 / 15:30
-  const fourDigitTime = rawStr.match(/^([01]?\d|2[0-3])([0-5]\d)\$/);
+  // 2. Введено 3-4 цифры времени слитно ("930", "1430") -> Сегодня в 09:30 / 14:30
+  const fourDigitTime = rawStr.match(/^([01]?\d|2[0-3])([0-5]\d)$/);
   if (fourDigitTime) {
     const hh = parseInt(fourDigitTime[1], 10);
     const mm = parseInt(fourDigitTime[2], 10);
-    const todayWithTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
-    return parseDeadlineObj_(todayWithTime, tz);
+    return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0), tz);
   }
 
-  // 3. Введено время через двоеточие или точку ("14:30" или "14.30") -> Сегодня в 14:30
-  const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)\$/);
+  // 3. Введено время через пробел, двоеточие или точку ("14 30", "14:30", "14.30")
+  const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.\s]+([0-5]\d)$/);
   if (timeMatch) {
     const hh = parseInt(timeMatch[1], 10);
     const mm = parseInt(timeMatch[2], 10);
-    const todayWithTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
-    return parseDeadlineObj_(todayWithTime, tz);
+    return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0), tz);
   }
 
-  // 4. Если Google Таблицы сами превратили ввод "14:30" в дату 30.12.1899 14:30
-  if (cellVal instanceof Date && !isNaN(cellVal.getTime()) && cellVal.getFullYear() === 1899) {
+  // 4. Если Google Таблицы превратили ввод времени в дату 1899–1910 гг.
+  if (cellVal instanceof Date && !isNaN(cellVal.getTime()) && cellVal.getFullYear() <= 1910) {
     const combined = new Date(now.getFullYear(), now.getMonth(), now.getDate(), cellVal.getHours(), cellVal.getMinutes(), 0);
     return parseDeadlineObj_(combined, tz);
   }
@@ -1317,7 +1388,7 @@ function parseDeadlineObj_(val, timeZone) {
   const now = new Date();
 
   if (val instanceof Date && !isNaN(val.getTime())) {
-    if (val.getFullYear() === 1899) {
+    if (val.getFullYear() <= 1910) {
       const combined = new Date(now.getFullYear(), now.getMonth(), now.getDate(), val.getHours(), val.getMinutes(), 0);
       return parseDeadlineObj_(combined, tz);
     }
@@ -1337,25 +1408,25 @@ function parseDeadlineObj_(val, timeZone) {
   const s = String(val).trim();
   if (!s) return empty;
 
-  const hourOnlyMatch = s.match(/^([01]?\d|2[0-3])\$/);
+  const hourOnlyMatch = s.match(/^([01]?\d|2[0-3])$/);
   if (hourOnlyMatch) {
     const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(hourOnlyMatch[1], 10), 0, 0);
     return parseDeadlineObj_(dObj, tz);
   }
 
-  const fourDigitTime = s.match(/^([01]?\d|2[0-3])([0-5]\d)\$/);
+  const fourDigitTime = s.match(/^([01]?\d|2[0-3])([0-5]\d)$/);
   if (fourDigitTime) {
     const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(fourDigitTime[1], 10), parseInt(fourDigitTime[2], 10), 0);
     return parseDeadlineObj_(dObj, tz);
   }
 
-  const timeOnlyMatch = s.match(/^([01]?\d|2[0-3])[:\.]([0-5]\d)\$/);
+  const timeOnlyMatch = s.match(/^([01]?\d|2[0-3])[:\.\s]+([0-5]\d)$/);
   if (timeOnlyMatch) {
     const dObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parseInt(timeOnlyMatch[1], 10), parseInt(timeOnlyMatch[2], 10), 0);
     return parseDeadlineObj_(dObj, tz);
   }
 
-  const isoMatch = s.match(/^(\d{4})[\-\.](\d{1,2})[\-\.](\d{1,2})(?:[\sT,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
+  const isoMatch = s.match(/^(\d{4})[\-\.](\d{1,2})[\-\.](\d{1,2})(?:[\sT,]+([01]?\d|2[0-3])[:\.\s]([0-5]\d))?/);
   if (isoMatch) {
     const y  = parseInt(isoMatch[1], 10);
     const m  = parseInt(isoMatch[2], 10) - 1;
@@ -1365,7 +1436,7 @@ function parseDeadlineObj_(val, timeZone) {
     return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
   }
 
-  const ruMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})[\.\-\/](\d{2,4})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?/);
+  const ruMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})[\.\-\/](\d{2,4})(?:[\s,]+([01]?\d|2[0-3])[:\.\s]([0-5]\d))?/);
   if (ruMatch) {
     const d  = parseInt(ruMatch[1], 10);
     const m  = parseInt(ruMatch[2], 10) - 1;
@@ -1376,7 +1447,7 @@ function parseDeadlineObj_(val, timeZone) {
     return parseDeadlineObj_(new Date(y, m, d, hh, mm, 0), tz);
   }
 
-  const shortRuMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})(?:[\s,]+([01]?\d|2[0-3])[:\.]([0-5]\d))?\$/);
+  const shortRuMatch = s.match(/^(\d{1,2})[\.\-\/](\d{1,2})(?:[\s,]+([01]?\d|2[0-3])[:\.\s]([0-5]\d))?$/);
   if (shortRuMatch) {
     const d  = parseInt(shortRuMatch[1], 10);
     const m  = parseInt(shortRuMatch[2], 10) - 1;
@@ -1535,7 +1606,6 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const orderChanged = items.some((it, idx) => it.origIdx !== idx);
   const dlRange = sheet.getRange(2, 12, numRows, 1);
 
-  // Перезаписываем данные листа ТОЛЬКО если реально изменился порядок строк или нашлась текстовая дата
   if (orderChanged) {
     ensureDateValidationOnCell_(dlRange);
     const dlNumberFormats = items.map(it => [it.dlObj && it.dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
@@ -1575,7 +1645,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     const needStr = String(it.values[7] || '').trim();
     const isAct = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
     if (isAct) {
-      const liveDiams = Array.from(new Set((needStr.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
+      const liveDiams = extractTruePipeDiamsFromText_(needStr).filter(d => stockByDiam[d]);
       needBgs.push([liveDiams.length > 0 ? '#dcfce7' : null]);
     } else {
       needBgs.push([null]);
