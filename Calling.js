@@ -1,9 +1,10 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.5 — HK Trader Desk)
- * Файл: Calling.gs — Маршрутизация лидов, скоростной парсер труб (53010 / 530*10 / 630 8),
- * 100% АВТОМАТИЧЕСКОЕ Досье (K -> Заметка B без обрезки смысла), сброс подсветок на пустых ячейках,
- * авто-архивация H+I+J в Историю (N), живой мозг колонки O (Склад с тоннами/ценами + Транзит/Логистика
- * + Гонконгский детектор блефа «В этом году не берут»), календарь + быстрое время (14 / 1430 / 14 30) в L.
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.6)
+ * Файл: Calling.js — Полный боевой движок для листов:
+ * «1. Обзвон (База)», «2. Золотой список (Киты)», «3. Лист ожидания», «4.Архив лидов».
+ * - Монитор Склада в колонке O (Вариант 1 — только сухие факты остатков и цен Склада) для Ожидания и Китов.
+ * - VIP-логика для «2. Золотой список (Киты)»: Киты не вылетают в Ожидание при сбросе потребности и не улетают в Архив на 4/4 недозвоне.
+ * - Быстрый ввод времени в L (14 / 1430 / 14 30) + выпадающий календарь + авто-подъем очереди при обновлении.
  */
 
 const STANDARD_PIPE_DIAMS_ = [
@@ -11,6 +12,11 @@ const STANDARD_PIPE_DIAMS_ = [
   325, 299, 273, 245, 219, 194, 168, 159, 152, 148, 146, 133, 127,
   114, 108, 102, 89, 76, 73, 60, 57
 ];
+
+function isSheetWithStockMonitor_(sheetName) {
+  const n = String(sheetName || '').trim();
+  return n === "3. Лист ожидания" || n === "2. Золотой список (Киты)";
+}
 
 function handleCallingSheetEdit(e, sheet) {
   const row = e.range.rowStart;
@@ -114,7 +120,7 @@ function handleCallingSheetEdit(e, sheet) {
 
     updateSingleRowNeedHighlight_(sheet, row, formattedNeed);
 
-    if (sheetName === "3. Лист ожидания") {
+    if (isSheetWithStockMonitor_(sheetName)) {
       refreshSingleRowTactic_(sheet, row);
     }
     return;
@@ -125,7 +131,7 @@ function handleCallingSheetEdit(e, sheet) {
   // =================================================================
   if (col === 11) {
     processRawNoteIntoDossier_(sheet, row, e.oldValue);
-    if (sheetName === "3. Лист ожидания") {
+    if (isSheetWithStockMonitor_(sheetName)) {
       refreshSingleRowTactic_(sheet, row);
     }
     return;
@@ -154,7 +160,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  if (sheetName === "3. Лист ожидания" && (col === 3 || col === 6 || col === 7 || col === 9 || col === 10 || col === 14)) {
+  if (isSheetWithStockMonitor_(sheetName) && (col === 7 || col === 9 || col === 10 || col === 14)) {
     refreshSingleRowTactic_(sheet, row);
     return;
   }
@@ -172,6 +178,7 @@ function handleCallingSheetEdit(e, sheet) {
   const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
   const now = new Date();
   const nowStr = Utilities.formatDate(now, timeZone, "dd.MM.yyyy HH:mm");
+  const isWhaleSheet = (sheetName === "2. Золотой список (Киты)");
 
   processRawNoteIntoDossier_(sheet, row);
 
@@ -217,10 +224,10 @@ function handleCallingSheetEdit(e, sheet) {
     sheet.getRange(row, 14).setValue(updatedHistory);
     setDeadlineCellDate_(sheet, row, nextTryDate, false);
     sheet.getRange(row, 13).clearContent();
-    if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+    if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
 
     moveRowToBottom_(sheet, row);
-    ss.toast(`«${company || inn}» оставлен в базе на пробив секретаря (контроль: ${nextTryStr}). Строка опущена вниз!`, "🛡️ Выбить ЛПР", 4);
+    ss.toast(`«${company || inn}» оставлен на пробив секретаря (контроль: ${nextTryStr}). Строка опущена вниз!`, "🛡️ Выбить ЛПР", 4);
     return;
   }
 
@@ -253,14 +260,14 @@ function handleCallingSheetEdit(e, sheet) {
       setDeadlineCellDate_(sheet, row, nextCheckDateObj, false);
       sheet.getRange(row, 13).clearContent();
       updateSingleRowNeedHighlight_(sheet, row, liveNeed);
-      if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+      if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
       ss.toast(`🔥 Заявка (${liveNeed}) взята в просчет! Контроль: ${nextCheckDateStr}.`, "🔥 В просчете", 4);
     }
     return;
   }
 
-  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ ===
+  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ (Работает в «3. Лист ожидания» и «2. Золотой список (Киты)») ===
   if (decision.includes("выставлен счет") || decision.includes("счет") || decision.includes("счёт") || decision.includes("заказ")) {
     if (sheetName === "1. Обзвон (База)") {
       sheet.getRange(row, 13).clearContent();
@@ -283,9 +290,9 @@ function handleCallingSheetEdit(e, sheet) {
     setDeadlineCellDate_(sheet, row, nextCheckDateObj, false);
     sheet.getRange(row, 13).clearContent();
     updateSingleRowNeedHighlight_(sheet, row, liveNeed);
-    if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+    if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
     moveRowToBottom_(sheet, row);
-    ss.toast(`«${company || inn}» -> Счет зафиксирован в Истории! Тактика переключена на дожим счета (${nextCheckDateStr}).`, "💰 Выставлен счет", 4);
+    ss.toast(`«${company || inn}» -> Счет зафиксирован в Истории! Контроль оплаты: ${nextCheckDateStr}.`, "💰 Выставлен счет", 4);
     return;
   }
 
@@ -331,17 +338,17 @@ function handleCallingSheetEdit(e, sheet) {
     setDeadlineCellDate_(sheet, row, callbackDateObj, true);
     sheet.getRange(row, 13).clearContent();
     updateSingleRowNeedHighlight_(sheet, row, need);
-    if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+    if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
 
     moveRowToBottom_(sheet, row);
     ss.toast(`«${company || inn}» -> Перезвон: ${fullDispStr}. Строка убрана вниз таблицы!`, "⏰ Перезвон сегодня", 4);
     return;
   }
 
-  // === ВЕТКА 3Б: ❄️ СЕЗОН ЗАКРЫТ / В ЭТОМ ГОДУ НЕ БЕРУТ / СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
-  const isSeasonClosed = decision.includes("сезон") || decision.includes("в этом году") || decision.includes("до весн") || decision.includes("след. год") || decision.includes("замороз");
-  if (isSeasonClosed || decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер")) {
-    const defaultShiftDays = isSeasonClosed ? 25 : 30;
+  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
+  // Кит остается в Китах (+14 дней), Ожидание остается в Ожидании (+30 дней), из Обзвона переходит в Ожидание!
+  if (decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер") || decision.includes("сезон")) {
+    const defaultShiftDays = isWhaleSheet ? 14 : 30;
     const shiftDateObj = getNextWorkingDateObj_(now, defaultShiftDays);
     const minWaitIso   = getNextWorkingDateIso_(now, 2, timeZone);
     const useExisting  = (existingDlObj.dateObj && existingIsoDeadline > minWaitIso);
@@ -349,11 +356,10 @@ function handleCallingSheetEdit(e, sheet) {
     const finalHasTime = useExisting ? existingDlObj.hasTime : false;
     const finalDisp    = Utilities.formatDate(finalDateObj, timeZone, finalHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
-    const tagPrefix = isSeasonClosed ? `❄️ Сезон закрыт / В этом году всё (Проверка на блеф)` : `🔄 Сдвиг / Купил у других`;
-    const tag = `[${tagPrefix}${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
+    const tag = `[🔄 Сдвиг / Купил у других${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
-    if (sheetName === "3. Лист ожидания") {
+    if (sheetName === "3. Лист ожидания" || isWhaleSheet) {
       sheet.getRange(row, 8).setValue("Нет").setBackground(null);
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
@@ -361,7 +367,7 @@ function handleCallingSheetEdit(e, sheet) {
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос H+I+J сохранен в Историю (N), H = «Нет», тактика в O переключена (контроль: ${finalDisp})!`, isSeasonClosed ? "❄️ Фоновый прогрев" : "🔄 Сдвиг спроса", 5);
+      ss.toast(`Запрос H+I+J сохранен в Историю (N), H = «Нет», след. контакт: ${finalDisp}!`, "🔄 Сдвиг спроса", 5);
     } else {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
       if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
@@ -380,20 +386,23 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 3В: В ОЖИДАНИЕ (НЕТ ПОТРЕБНОСТИ / РАЗВЕДКА ПРОФИЛЯ) ===
+  // === ВЕТКА 3В: В ОЖИДАНИЕ / НЕТ ПОТРЕБНОСТИ ===
+  // Кит остается в Китах (VIP-пульс +7 раб. дней), Ожидание остается в Ожидании (+14 дн.), из Обзвона переходит в Ожидание!
   if (decision.includes("ожидан") || decision.includes("подума") || decision.includes("спящ") || decision.includes("нет потребн")) {
-    const defaultWaitObj = getNextWorkingDateObj_(now, 14);
+    const defaultWaitDays = isWhaleSheet ? 7 : 14;
+    const defaultWaitObj = getNextWorkingDateObj_(now, defaultWaitDays);
     const todayIso = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
-    const useExisting = (existingDlObj.dateObj && existingIsoDeadline >= todayIso);
+    const useExisting = (existingDlObj.dateObj && existingIsoDeadline > todayIso);
     const targetDateObj = useExisting ? existingDlObj.dateObj : defaultWaitObj;
     const targetHasTime = useExisting ? existingDlObj.hasTime : false;
     const targetDisp    = Utilities.formatDate(targetDateObj, timeZone, targetHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
     const reconSnap = buildNeedSnapshot_(need, pipeType, application, "Берут в работу");
-    const tag = `[⏳ В Ожидание${reconSnap} (из «${sheetName}») - ${nowStr}]`;
+    const actionLabel = isWhaleSheet ? `🐋 Плановый контакт с Китом (Нет текущей потребности)` : `⏳ В Ожидание`;
+    const tag = `[${actionLabel}${reconSnap} - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
-    if (sheetName === "3. Лист ожидания") {
+    if (sheetName === "3. Лист ожидания" || isWhaleSheet) {
       sheet.getRange(row, 8).setValue("Нет").setBackground(null);
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.getRange(row, 14).setValue(updatedHistory);
@@ -401,7 +410,7 @@ function handleCallingSheetEdit(e, sheet) {
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Профиль H+I+J записан в Историю (N), H сброшена в «Нет» (I и J очищены), дедлайн: ${targetDisp}`, "⏳ Ожидание", 4);
+      ss.toast(`Профиль H+I+J записан в Историю (N), H = «Нет», следующий контакт: ${targetDisp}`, isWhaleSheet ? "🐋 Кит на контроле" : "⏳ Ожидание", 4);
       return;
     }
 
@@ -423,7 +432,7 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 4: НЕДОЗВОН (Каскадный шаг ТЗ v6.4: 1 -> 3 -> 7 дней и в Архив на 4/4) ===
+  // === ВЕТКА 4: НЕДОЗВОН (Каскад 1 -> 3 -> 7 дней; Киты защищены от авто-сброса в Архив на 4/4!) ===
   if (decision.includes("недозвон") || decision.includes("не дозвон") || decision.includes("сброс") || decision.includes("не берет")) {
     const match = history.match(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/i);
     let attempts = match ? parseInt(match[1], 10) : 0;
@@ -434,19 +443,23 @@ function handleCallingSheetEdit(e, sheet) {
       ? history.replace(/\[(?:📞\s*)?Недозвон:\s*\d+\/4(?:\s*-\s*[^\]]+)?\]/i, callTag)
       : prependHistoryLog_(history, callTag);
 
-    if (attempts < 4) {
+    if (attempts < 4 || isWhaleSheet) {
       const stepDaysMap = { 1: 1, 2: 3, 3: 7 };
-      const stepDays = stepDaysMap[attempts] || 1;
+      const stepDays = stepDaysMap[attempts] || 7;
       const nextCallDateObj = getNextWorkingDateObj_(now, stepDays);
       const nextCallStr     = Utilities.formatDate(nextCallDateObj, timeZone, "dd.MM.yyyy");
 
       sheet.getRange(row, 14).setValue(updatedHistory);
       setDeadlineCellDate_(sheet, row, nextCallDateObj, false);
       sheet.getRange(row, 13).clearContent();
-      if (sheetName === "3. Лист ожидания") refreshSingleRowTactic_(sheet, row);
+      if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
 
       moveRowToBottom_(sheet, row);
-      ss.toast(`Недозвон (${attempts}/4, шаг +${stepDays} дн.). Дедлайн: ${nextCallStr}. Строка опущена вниз!`, "📞 Недозвон", 4);
+      if (isWhaleSheet && attempts >= 4) {
+        ss.toast(`🐋 Кит НЕ удаляется в Архив при недозвоне (${attempts}/4)! Сдвинут вниз на ${nextCallStr} — проверьте мессенджер/общий номер.`, "🐋 Защита Кита", 6);
+      } else {
+        ss.toast(`Недозвон (${attempts}/4, шаг +${stepDays} дн.). Дедлайн: ${nextCallStr}. Строка опущена вниз!`, "📞 Недозвон", 4);
+      }
     } else {
       const targetSheet = getSheetByNameSafe(ss, "4.Архив лидов");
       if (!targetSheet) return ss.toast("Ошибка: лист Архива не найден", "Ошибка");
@@ -517,7 +530,7 @@ function updateSingleRowNeedHighlight_(sheet, row, needVal) {
   }
 
   const stockByDiam = getAvailableStockDiamsMap_(sheet.getParent());
-  const liveDiams = Array.from(new Set((str.match(/\b\d{2,4}\b/g) || []).map(Number))).filter(d => stockByDiam[d]);
+  const liveDiams = extractCleanPipeDiams_(str).filter(d => stockByDiam[d]);
   cell.setBackground(liveDiams.length > 0 ? '#dcfce7' : null);
 }
 
@@ -527,11 +540,12 @@ function cleanupRowIfCompletelyEmpty_(sheet, row, sheetName) {
   const hasAnyData = vals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
   if (hasAnyData) return false;
 
-  const maxCol = sheetName === "3. Лист ожидания" ? 15 : 14;
+  const hasMonitor = isSheetWithStockMonitor_(sheetName);
+  const maxCol = hasMonitor ? 15 : 14;
   sheet.getRange(row, 1, 1, maxCol).setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
   sheet.getRange(row, 2).setNote('');
   sheet.getRange(row, 12).setNumberFormat('dd.MM.yyyy');
-  if (sheetName === "3. Лист ожидания") {
+  if (hasMonitor && sheet.getMaxColumns() >= 15) {
     sheet.getRange(row, 15).clearContent();
   }
   return true;
@@ -547,7 +561,7 @@ function handleMultiCellCrmEdit_(e, sheet) {
       const hVal = String(sheet.getRange(r, 8).getValue() || '').trim();
       updateSingleRowNeedHighlight_(sheet, r, hVal);
       updateSingleRowDeadlineHighlight_(sheet, r);
-      if (sheetName === "3. Лист ожидания") {
+      if (isSheetWithStockMonitor_(sheetName)) {
         refreshSingleRowTactic_(sheet, r);
       }
     }
@@ -596,8 +610,6 @@ function extractSmartSummaryFromNote_(latestText, fullDossierText) {
   const tags = [];
 
   if (/весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(lower))   tags.push('⚖️ ВЕСЫ: +10% на допуск!');
-  if (/в этом году|до весн|не сезон|сезон закрыт|след.*год|зимой не/i.test(lower)) tags.push('❄️ Сезон/Блеф?');
-  if (/не закуп|отказ|свой поставщ|берут у друг/i.test(lower))          tags.push('🛡️ Барьер/Свой поставщик');
   if (/тендер|торг|аукцион|закупк|44-фз|223-фз|аст|ртс/i.test(lower)) tags.push('🏛️ Тендеры');
   if (/аккредитац|реестр|сб\b|служб.*безопасн/i.test(lower))          tags.push('📑 Аккредитация');
   if (/отсрочк|постоплат|аванс|финансир|нет денег|бюджет/i.test(lower)) tags.push('💳 Финансы/Отсрочка');
@@ -605,14 +617,13 @@ function extractSmartSummaryFromNote_(latestText, fullDossierText) {
   if (/обсад|скважин|бур/i.test(lower))                              tags.push('💧 Обсадка/Бурение');
   if (/сваи|свай|опор|мост/i.test(lower))                            tags.push('🏗️ Сваи/Опоры');
 
-  const diams = extractTruePipeDiamsFromText_(combinedSource);
+  const diams = extractCleanPipeDiams_(combinedSource);
   if (diams.length > 0) {
     tags.push(`Ø ${diams.slice(0, 5).join(',')}`);
   }
 
   const cleanLine = String(latestText || '').replace(/\n+/g, ' ').replace(/^📌\s*/, '').trim();
-  // Увеличен лимит до 110 символов, чтобы не обрезать смысл заметки на полслове!
-  const shortPhrase = cleanLine.length > 115 ? cleanLine.slice(0, 112).trim() + '…' : cleanLine;
+  const shortPhrase = cleanLine.length > 95 ? cleanLine.slice(0, 92).trim() + '…' : cleanLine;
 
   if (tags.length > 0) {
     return `📌 ${tags.join(' • ')} | ${shortPhrase}`;
@@ -639,12 +650,9 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
 }
 
 // =================================================================
-// МОЗГ ТОРГОВОГО ДЕСКА (КОЛОНКА O В «3. ЛИСТ ОЖИДАНИЯ» — СКЛАД + ТРАНЗИТ + БЛЕФ-ЧЕК)
+// ЧИСТЫЙ МОНИТОР СКЛАДА И ПРАЙСА (КОЛОНКА O В «3. ЛИСТ ОЖИДАНИЯ» И «2. КИТЫ»)
 // =================================================================
 
-/**
- * Считывает живой Склад вместе с тоннажем, состоянием и ценой ₽/тн по каждому диаметру
- */
 function getAvailableStockDiamsMap_(ss) {
   const whSheet = getSheetByNameSafe(ss, 'Склад');
   const stockByDiam = {};
@@ -668,192 +676,81 @@ function getAvailableStockDiamsMap_(ss) {
       else if (cl.includes('леж')) condShort = 'Леж.';
       else if (cl.includes('восст')) condShort = 'Восст.';
 
-      const tnStr = stockTn > 0 ? `${ Number(stockTn.toFixed(1)) }т` : `${ Math.round(stockM) }м`;
-      const prStr = priceTn > 0 ? ` по ${(priceTn / 1000).toFixed(0)}к` : '';
-      stockByDiam[diam].push(`${diam}х${wall} ${condShort} (${tnStr}${prStr})`);
+      const qtyStr = stockTn > 0 ? `${Number(stockTn.toFixed(1))}т` : `${Math.round(stockM)}м`;
+      const prStr  = priceTn > 0 ? ` — ${priceTn.toLocaleString('ru-RU')} ₽` : '';
+      stockByDiam[diam].push(`${diam}х${wall} ${condShort} (${qtyStr}${prStr})`);
     }
   });
   return stockByDiam;
 }
 
-/**
- * Извлекает ТОЛЬКО реальные диаметры труб, игнорируя индексы, дома и случайные числа в тексте
- */
-function extractTruePipeDiamsFromText_(text) {
+function extractCleanPipeDiams_(text) {
   if (!text) return [];
-  const clean = String(text)
-    // Убираем даты (19.10.2026) и время (14:26)
+  const withoutDates = String(text)
     .replace(/\b\d{1,2}[\.\-\/]\d{1,2}[\.\-\/]\d{2,4}\b/g, ' ')
     .replace(/\b\d{1,2}:\d{2}\b/g, ' ');
-
-  const found = [];
-  const matches = clean.match(/\b\d{2,4}\b/g) || [];
-  matches.forEach(m => {
-    const n = parseInt(m, 10);
-    if (STANDARD_PIPE_DIAMS_.includes(n) && !found.includes(n)) {
-      found.push(n);
-    }
-  });
-  return found;
-}
-
-function extractShortCityForTactic_(rawAddr) {
-  const s = String(rawAddr || '').trim();
-  if (!s) return '';
-  const gMatch = s.match(/(?:г\.|город)\s*([А-ЯЁа-яё\-]+(?:\s+[А-ЯЁа-яё\-]+)?)/i);
-  if (gMatch && gMatch[1]) return 'г. ' + gMatch[1].trim();
-  const oblMatch = s.match(/([А-ЯЁа-яё\-]+)\s+(?:обл|край|респ)/i);
-  if (oblMatch && oblMatch[1]) return oblMatch[1].trim();
-  const first = s.split(',')[0].replace(/^\d{6}\s*/, '').trim();
-  return first.length > 22 ? '' : first;
+  return Array.from(new Set((withoutDates.match(/\b\d{2,4}\b/g) || []).map(Number)))
+    .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
 }
 
 function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
-  const cityRaw = String(rowVals[2] || '').trim();
-  const email   = String(rowVals[5] || '').trim();
-  const sphere  = String(rowVals[6] || '').trim();
   const need    = String(rowVals[7] || '').trim();
-  const pType   = String(rowVals[8] || '').trim();
-  const pApp    = String(rowVals[9] || '').trim();
   const notes   = String(rowVals[10] || '').trim();
   const history = String(rowVals[13] || '').trim();
   const dossier = String(companyDossierNote || '').trim();
 
-  const shortCity = extractShortCityForTactic_(cityRaw);
-  const cityTag   = shortCity ? ` [${shortCity}]` : '';
-  const hasEmail  = email.includes('@');
-
-  const allContext = `${need} ${pType} ${pApp} ${notes} ${dossier} ${history}`;
+  const allContext = `${notes} ${dossier} ${history}`;
   const allLower   = allContext.toLowerCase();
 
   const needLower = need.toLowerCase();
   const hasActiveNeed = need !== '' && needLower !== 'нет' && needLower !== '—' && needLower !== '-';
-
-  const historyLines = history.split('\n').map(s => s.trim()).filter(Boolean);
-  const firstHistoryLine = historyLines[0] || '';
-  const touchCount = historyLines.length;
+  const firstHistoryLine = (history.split('\n')[0] || '').trim();
 
   const isScaleClient = /весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(allLower);
-  const scaleWarnTag  = isScaleClient ? ' [⚖️ ВЕСЫ: +10% на допуск!]' : '';
+  const scaleTag = isScaleClient ? ' [⚖️ Весы]' : '';
 
-  // 1. ПРИОРИТЕТ №1: ДОЖИМ ВЫСТАВЛЕННОГО СЧЕТА
+  // 1. Выставлен счет
   if (firstHistoryLine.includes('💰') || firstHistoryLine.toLowerCase().includes('выставлен счет')) {
-    const targetPipe = hasActiveNeed ? ` (${need})` : '';
-    return `💰 ДОЖИМ СЧЕТА${targetPipe}${cityTag}: узнать проходную цену конкурентов / подтвердить дату оплаты${scaleWarnTag}`;
+    const targetPipe = hasActiveNeed ? `: ${need}` : '';
+    return `💰 Выставлен счет${targetPipe}${scaleTag}`;
   }
 
-  // 2. ПРИОРИТЕТ №2: ЖИВАЯ ЗАЯВКА В КОЛОНКЕ H (Склад vs Транзит + Логистика)
+  // 2. Живая заявка в H — сверка со Складом
   if (hasActiveNeed) {
-    const liveDiams = extractTruePipeDiamsFromText_(need);
-    const inStockDetails = [];
+    const liveDiams = extractCleanPipeDiams_(need);
+    const matches = [];
     liveDiams.forEach(d => {
-      if (stockByDiam[d] && stockByDiam[d].length > 0) {
-        inStockDetails.push(stockByDiam[d].slice(0, 2).join(', '));
-      }
+      if (stockByDiam[d]) matches.push(stockByDiam[d].join(', '));
     });
 
-    if (inStockDetails.length > 0) {
-      return `🔥 НА СКЛАДЕ ПОД ЗАЯВКУ (${need})${cityTag}: есть ${inStockDetails.join(' | ')} — дать цену + расчет машины и закрыть в Счет!${scaleWarnTag}`;
+    if (matches.length > 0) {
+      return `🟢 Под заявку на складе: ${matches.join(' | ')}${scaleTag}`;
     }
-    return `🌐 ТРАНЗИТ В ПРОСЧЕТ (${need})${cityTag}: нет на базе Воронеж — пробить Закупку у поставщиков + попутную фуру (CPT) за 15 мин!${scaleWarnTag}`;
+    return `⚪ Нет на складе (заявка: ${need})${scaleTag}`;
   }
 
-  // 3. ПРИОРИТЕТ №3: ПРОБИВ НЕДОЗВОНА ИЛИ СЕКРЕТАРЯ
-  const missMatch = firstHistoryLine.match(/Недозвон:\s*(\d+)\/4/i);
-  if (missMatch) {
-    const att = parseInt(missMatch[1], 10);
-    if (att === 1) return `📲 После недозвона (1/4): набрать в другое время дня (утро до планерки / после 15:00)`;
-    if (att === 2) return `💬 После недозвона (2/4): скинуть короткий пинг в WhatsApp / Telegram на мобильный ЛПР`;
-    return `⚠️ Недозвон (3/4 — последний шанс): пробить через ПТО / снабжение перед Архивом`;
-  }
+  // 3. В H «Нет» — сверка прошлых диаметров из Истории (N) и Досье (B/K) со Складом
+  const pastDiams = extractCleanPipeDiams_(allContext);
+  if (pastDiams.length > 0) {
+    const stockHits = [];
+    pastDiams.forEach(d => {
+      if (stockByDiam[d]) stockHits.push(stockByDiam[d][0]);
+    });
 
-  // 4. ПРИОРИТЕТ №4: ГОНКОНГСКИЙ ПРОТОКОЛ «В ЭТОМ ГОДУ УЖЕ НИЧЕГО НЕ БУДЕТ / СЕЗОН ЗАКРЫТ» (ПРОВЕРКА НА БЛЕФ vs ФОН)
-  const isOffSeasonOrBluff = /❄️|в этом году|до весн|не сезон|сезон закрыт|след.*год|зимой не|объектов нет до/i.test(allLower);
-  if (isOffSeasonOrBluff) {
-    const bluffStep = touchCount % 3;
-    if (bluffStep === 0) {
-      return `🕵️ ПРОВЕРКА НА БЛЕФ («В этом году всё»)${cityTag}: пробить по ИНН активные тендеры + скинуть в WA 1 позицию ниже рынка (если врут и берут у других — клюнут!)`;
-    } else if (bluffStep === 1) {
-      return `💰 КОНЕЦ ГОДА / БАРТЕР${cityTag}: предложить освоить остаток годового бюджета (счет сейчас + зимнее хранение у нас до весны) ИЛИ выкупить их остатки трубы с базы!`;
-    } else {
-      return `📐 ЗАХОД В ВЕСЕННЮЮ СМЕТУ${cityTag}: забрать спецификацию будущих объектов сейчас — заложить нашу лежалую/восст. вместо новой трубы (-25% к смете)!`;
+    if (stockHits.length > 0) {
+      return `🟢 На складе их Ø: ${stockHits.slice(0, 3).join('; ')}${scaleTag}`;
     }
+    return `⚪ На складе нет (профиль: Ø ${pastDiams.slice(0, 5).join(', ')})${scaleTag}`;
   }
 
-  // 5. ПРИОРИТЕТ №5: СНАЙПЕР СКЛАДА (По прошлым диаметрам из Истории N и Досье B/K)
-  const pastDiams = extractTruePipeDiamsFromText_(`${notes} ${dossier} ${history}`);
-  const matchedStockList = [];
-  pastDiams.forEach(d => {
-    if (stockByDiam[d] && stockByDiam[d].length > 0) {
-      matchedStockList.push(stockByDiam[d][0]);
-    }
-  });
-
-  if (matchedStockList.length > 0) {
-    const stockSummary = matchedStockList.slice(0, 2).join('; ');
-    const sniperMode = touchCount % 3;
-    if (sniperMode === 0) {
-      return `🎯 СНАЙПЕР СКЛАДА${cityTag}: под их профиль в наличии ${stockSummary} — предложить живой объем с базы Воронеж${scaleWarnTag}`;
-    } else if (sniperMode === 1) {
-      return `🚛 ПОПУТКА / ДОГРУЗ СО СКЛАДА${cityTag}: идет машина в их сторону — предложить закинуть ${stockSummary} по цене попутки${scaleWarnTag}`;
-    } else {
-      return `📉 АРБИТРАЖ СМЕТЫ СО СКЛАДА${cityTag}: предложить партию ${stockSummary} под экономию бюджета или выкупить их деловые остатки${scaleWarnTag}`;
-    }
-  }
-
-  // 6. ПРИОРИТЕТ №6: СПЕЦ-СИГНАЛЫ ИЗ ДОСЬЕ КЛИЕНТА (Отказ снабженца, Тендеры, Аккредитация, Финансы)
-  if (/не закуп|жесткий отказ|свой поставщ|берут у друг/i.test(allLower)) {
-    return `🛡️ ОБХОД СНАБЖЕНЦА${cityTag}: снабженец блокирует — выйти напрямую на гл. инженера / начальника участка или дать проходную цену как 2-й резервный поставщик`;
-  }
-  if (/аккредитац|реестр|служб.*безопасн/i.test(allLower) && touchCount % 2 === 0) {
-    return `📑 АККРЕДИТАЦИЯ В СБ: проверить статус проверки наших уставных документов и зайти в закрытый реестр поставщиков`;
-  }
-  if (/тендер|торг|аукцион|44-фз|223-фз|аст/i.test(allLower) && touchCount % 2 === 0) {
-    return `🏛️ ТЕНДЕРНЫЙ ДЕСК: запросить ТЗ ближайшего тендера — дать проходную цену за счет стенки в минусовом допуске ГОСТ или восстановки`;
-  }
-  if (/не финансир|нет денег|ждут аванс|задерж/i.test(allLower) && touchCount % 2 === 0) {
-    return `💳 ФИНАНСЫ / ТРАНШ: проверить приход аванса от заказчика / предложить отгрузку частями (по 5–10 тн) или бартер на их лежалые остатки`;
-  }
-
-  // 7. ПРИОРИТЕТ №7: ОТРАСЛЕВОЙ ЗАХОД ПО СФЕРЕ (Колонка G) + АКТИВНАЯ РОТАЦИЯ (Без вечного зависания на Шаге 1!)
-  const kpSent = /📧|💬|📄|Прайс|КП/i.test(history) || /кп|прайс/i.test(allLower);
-
-  // Шаг 1 показываем ТОЛЬКО если с клиентом еще вообще не было касаний и не отправлялся прайс
-  if (!kpSent && touchCount === 0 && !notes) {
-    if (hasEmail) {
-      return `📧 ШАГ 1 (Якорь на Email)${cityTag}: выслать Прайс + Карточку компании и узнать рабочие Ø`;
-    }
-    return `💬 ШАГ 1 (Якорь в WhatsApp/TG)${cityTag}: нет почты в F — скинуть визитку и наличие в мессенджер ЛПР + выбить рабочий Email`;
-  }
-
-  // Если известна Сфера (G), но еще не выбиты точные диаметры — бьем калибрами со склада под их отрасль!
-  if (pastDiams.length === 0 && sphere) {
-    const sphLower = sphere.toLowerCase();
-    if (sphLower.includes('бур') || sphLower.includes('гнб')) {
-      return `💧 ПОД БУРЕНИЕ / ГНБ${cityTag}: предложить со склада НКТ 73, 89 и обсадную/футляры 168–325 мм (узнать текущие буровые установки)`;
-    }
-    if (sphLower.includes('дорож') || sphLower.includes('мост')) {
-      return `🏗️ ПОД ДРСУ / МОСТЫ${cityTag}: предложить трубу под водопропускные гильзы, сваи и проколы Ø 325–820 мм + выкуп их остатков с базы`;
-    }
-    if (sphLower.includes('строит') || sphLower.includes('пгс')) {
-      return `🏢 ПОД СТРОЙКУ (ПГС)${cityTag}: предложить трубу под сваи, футляры коммуникаций и распорки котлованов (лежалая/восст. со склада)`;
-    }
-  }
-
-  const rot = touchCount % 4;
-  if (rot === 0) {
-    return `🎯 РАЗВЕДКА КАЛИБРОВ${cityTag}: выбить рабочие Ø, допуск по б/у-восстановке и график ближайших объектов`;
-  } else if (rot === 1) {
-    return `📉 ЗАМЕНА НОВОЙ НА ЛЕЖАК/ВОССТ.${cityTag}: предложить пересогласовать трубу в смете на нашу лежалую или восстановленную (-25% к бюджету)`;
-  } else if (rot === 2) {
-    return `♻️ ОБРАТНЫЙ ВЫКУП / ДОГРУЗ${cityTag}: спросить, нет ли на их базе невостребованных остатков трубы на выкуп/обмен + предложить попутную доставку`;
-  } else {
-    return `🤝 ВЫХОД НА ПТО / ГЛ. ИНЖЕНЕРА${cityTag}: узнать контакт ПТО или механика, забрать спецификацию под сваи/футляры/опоры на просчет`;
-  }
+  // 4. Диаметры еще не известны — сухой статус по Прайсу
+  const kpSent = /📧|💬|📄|Прайс|КП/i.test(history);
+  return (kpSent ? `✅ Прайс отправлен` : `📧 Прайс не высылался`) + scaleTag;
 }
 
 function refreshSingleRowTactic_(sheet, row) {
-  if (!sheet || sheet.getName().trim() !== "3. Лист ожидания" || row < 2) return;
+  if (!sheet || !isSheetWithStockMonitor_(sheet.getName()) || row < 2) return;
+  if (sheet.getMaxColumns() < 15) return;
   const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
   const hasAny = rowVals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
   if (!hasAny) {
@@ -937,7 +834,7 @@ function buildNeedSnapshot_(need, pipeType, application, customPrefix) {
 }
 
 // =================================================================
-// ДВУХУРОВНЕВЫЙ БИРЖЕВОЙ РАДАР + СБРОС ЗАЛИПШИХ ПОДСВЕТОК В H
+// ДВУХУРОВНЕВЫЙ БИРЖЕВОЙ РАДАР (ДЛЯ «3. ЛИСТ ОЖИДАНИЯ» И «2. КИТЫ»)
 // =================================================================
 
 function matchWarehouseWithWaitingList() {
@@ -974,14 +871,12 @@ function matchWarehouseWithWaitingList() {
       const histStr = String(r[13] || '').trim();
       const dossier = String((compNotes[idx] && compNotes[idx][0]) || '').trim();
 
-      if (sName === "3. Лист ожидания") {
-        tacticsCol.push([computeDynamicTacticForRow_(r, stockByDiam, dossier)]);
-      }
+      tacticsCol.push([computeDynamicTacticForRow_(r, stockByDiam, dossier)]);
 
       const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
 
       if (isNeedActive) {
-        const liveDiams = extractTruePipeDiamsFromText_(needStr).filter(d => stockByDiam[d]);
+        const liveDiams = extractCleanPipeDiams_(needStr).filter(d => stockByDiam[d]);
         if (liveDiams.length > 0) {
           needBgColors.push(['#dcfce7']);
           hotMatches.push(
@@ -994,17 +889,17 @@ function matchWarehouseWithWaitingList() {
       needBgColors.push([null]);
 
       const combinedPast = `${histStr} ${notes} ${dossier}`;
-      const pastDiams = extractTruePipeDiamsFromText_(combinedPast).filter(d => stockByDiam[d]);
+      const pastDiams = extractCleanPipeDiams_(combinedPast).filter(d => stockByDiam[d]);
 
       if (pastDiams.length > 0) {
         historyMatches.push(
-          `💡 [${sName.replace(/^\d+\.\s*/, '')}] ${comp || 'Клиент'} (${lpr || ph}): в истории/досье Ø ${pastDiams.join(', ')}`
+          `💡 [${sName.replace(/^\d+\.\s*/, '')}] ${comp || 'Клиент'} (${lpr || ph}): в профиле Ø ${pastDiams.join(', ')}`
         );
       }
     });
 
     sh.getRange(2, 8, lRow - 1, 1).setBackgrounds(needBgColors);
-    if (sName === "3. Лист ожидания" && tacticsCol.length > 0) {
+    if (sh.getMaxColumns() >= 15 && tacticsCol.length > 0) {
       sh.getRange(2, 15, lRow - 1, 1).setValues(tacticsCol);
     }
   });
@@ -1014,12 +909,12 @@ function matchWarehouseWithWaitingList() {
     const preview = allMatches.slice(0, 14).join('\n');
     const more = allMatches.length > 14 ? `\n...и ещё ${allMatches.length - 14} совпадений!` : '';
     SpreadsheetApp.getUi().alert(
-      `🎯 Биржевой радар: Горячих в H (${hotMatches.length}) | По Истории и Досье (${historyMatches.length})`,
-      `Колонка O (Чем дожимать) обновлена со свежими тоннами и ценами со Склада!\n\n${preview}${more}`,
+      `🎯 Биржевой радар: Горячих в H (${hotMatches.length}) | По профилю (${historyMatches.length})`,
+      `Монитор Склада (Колонка O) обновлен в Ожидании и Китах:\n\n${preview}${more}`,
       SpreadsheetApp.getUi().ButtonSet.OK
     );
   } else {
-    ss.toast('Колонка O обновлена со свежими данными Склада!', '🔍 Радар обновлен', 5);
+    ss.toast('Монитор Склада (Колонка O) обновлен!', '🔍 Радар обновлен', 5);
   }
 }
 
@@ -1349,14 +1244,12 @@ function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
   const now = new Date();
   const tz = timeZone || "Europe/Moscow";
 
-  // 1. Введено 1-2 цифры часа ("9", "14") -> Сегодня в 09:00 / 14:00
   const hourOnlyMatch = rawStr.match(/^([01]?\d|2[0-3])$/);
   if (hourOnlyMatch) {
     const hh = parseInt(hourOnlyMatch[1], 10);
     return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, 0, 0), tz);
   }
 
-  // 2. Введено 3-4 цифры времени слитно ("930", "1430") -> Сегодня в 09:30 / 14:30
   const fourDigitTime = rawStr.match(/^([01]?\d|2[0-3])([0-5]\d)$/);
   if (fourDigitTime) {
     const hh = parseInt(fourDigitTime[1], 10);
@@ -1364,7 +1257,6 @@ function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
     return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0), tz);
   }
 
-  // 3. Введено время через пробел, двоеточие или точку ("14 30", "14:30", "14.30")
   const timeMatch = rawStr.match(/^([01]?\d|2[0-3])[:\.\s]+([0-5]\d)$/);
   if (timeMatch) {
     const hh = parseInt(timeMatch[1], 10);
@@ -1372,7 +1264,6 @@ function parseSmartDeadlineInput_(cellVal, rawEventVal, rawOldVal, timeZone) {
     return parseDeadlineObj_(new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0), tz);
   }
 
-  // 4. Если Google Таблицы превратили ввод времени в дату 1899–1910 гг.
   if (cellVal instanceof Date && !isNaN(cellVal.getTime()) && cellVal.getFullYear() <= 1910) {
     const combined = new Date(now.getFullYear(), now.getMonth(), now.getDate(), cellVal.getHours(), cellVal.getMinutes(), 0);
     return parseDeadlineObj_(combined, tz);
@@ -1511,7 +1402,8 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const now = new Date();
   const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
   const nowHHMM  = Utilities.formatDate(now, timeZone, "HH:mm");
-  const numCols = sheetName === "3. Лист ожидания" ? 15 : 14;
+  const hasMonitor = isSheetWithStockMonitor_(sheetName) && sheet.getMaxColumns() >= 15;
+  const numCols = hasMonitor ? 15 : 14;
   const numRows = lastRow - 1;
 
   const fullRange = sheet.getRange(2, 1, numRows, numCols);
@@ -1574,7 +1466,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
       bucket = 2;
     }
 
-    if (sheetName === "3. Лист ожидания") {
+    if (hasMonitor) {
       const newTactic = computeDynamicTacticForRow_(r, stockByDiam, n[1]);
       if (String(r[14] || '') !== newTactic) tacticsChanged = true;
       r[14] = newTactic;
@@ -1623,7 +1515,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
       dlRange.setNumberFormats(dlNumberFormats);
       dlRange.setValues(items.map(it => [it.values[11] || ""]));
     }
-    if (sheetName === "3. Лист ожидания" && tacticsChanged) {
+    if (hasMonitor && tacticsChanged) {
       sheet.getRange(2, 15, numRows, 1).setValues(items.map(it => [it.values[14] || ""]));
     }
   }
@@ -1645,7 +1537,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     const needStr = String(it.values[7] || '').trim();
     const isAct = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
     if (isAct) {
-      const liveDiams = extractTruePipeDiamsFromText_(needStr).filter(d => stockByDiam[d]);
+      const liveDiams = extractCleanPipeDiams_(needStr).filter(d => stockByDiam[d]);
       needBgs.push([liveDiams.length > 0 ? '#dcfce7' : null]);
     } else {
       needBgs.push([null]);
