@@ -13,6 +13,9 @@ const STANDARD_PIPE_DIAMS_ = [
   114, 108, 102, 89, 76, 73, 60, 57
 ];
 
+// Максимальное число плановых контактов на 1 рабочий день (для умного распределения дат без свалки в один день)
+const MAX_CALLS_PER_DAY_ = 10;
+
 function isSheetWithStockMonitor_(sheetName) {
   const n = String(sheetName || '').trim();
   return n === "3. Лист ожидания" || n === "2. Золотой список (Киты)";
@@ -149,9 +152,22 @@ function handleCallingSheetEdit(e, sheet) {
     ensureDateValidationOnCell_(cell);
 
     if (dlObj.dateObj) {
-      cell.setNumberFormat(dlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
-      cell.setValue(dlObj.dateObj);
-      updateSingleRowDeadlineHighlight_(sheet, row, dlObj);
+      const safeDateObj = dlObj.hasTime
+        ? shiftWeekendToMonday_(dlObj.dateObj)
+        : getSmartBalancedDeadlineObj_(sheet, dlObj.dateObj, timeZone, row);
+      const finalDlObj  = (safeDateObj.getTime() !== dlObj.dateObj.getTime())
+        ? parseDeadlineObj_(safeDateObj, timeZone)
+        : dlObj;
+      cell.setNumberFormat(finalDlObj.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+      cell.setValue(finalDlObj.dateObj);
+      updateSingleRowDeadlineHighlight_(sheet, row, finalDlObj);
+      if (!dlObj.hasTime && finalDlObj.isoDate !== dlObj.isoDate) {
+        sheet.getParent().toast(
+          `Чтобы не копить все звонки в один день или выходной, дата распределена на ${finalDlObj.displayStr}`,
+          "📅 Умное распределение",
+          4
+        );
+      }
     } else {
       cell.clearContent();
       cell.setNumberFormat("dd.MM.yyyy");
@@ -267,13 +283,13 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ (Работает в «3. Лист ожидания» и «2. Золотой список (Киты)») ===
+  // === ВЕТКА 1Б: ВЫСТАВЛЕН СЧЕТ (Автоматический статус модуля «Заказы») ===
   if (decision.includes("выставлен счет") || decision.includes("счет") || decision.includes("счёт") || decision.includes("заказ")) {
-    if (sheetName === "1. Обзвон (База)") {
+    if (sheetName === "1. Обзвон (База)" || sheetName === "3. Лист ожидания") {
       sheet.getRange(row, 13).clearContent();
       ss.toast(
-        "В холодном «Обзвоне» выберите «Горящая заявка (В просчет)» или «В Ожидание (Нет потребности)»!",
-        "💡 Маршрутизация Обзвона",
+        "Статус «Выставлен счет» ставится и снимается автоматически через модуль «Заказы»! Для живого запроса используйте «Горящая заявка (В просчет)».",
+        "💡 Авто-статус модуля Заказы",
         5
       );
       return;
@@ -345,18 +361,46 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ ===
-  // Кит остается в Китах (+14 дней), Ожидание остается в Ожидании (+30 дней), из Обзвона переходит в Ожидание!
-  if (decision.includes("сдвиг") || decision.includes("купил") || decision.includes("конкурент") || decision.includes("тендер") || decision.includes("сезон")) {
-    const defaultShiftDays = isWhaleSheet ? 14 : 30;
-    const shiftDateObj = getNextWorkingDateObj_(now, defaultShiftDays);
-    const minWaitIso   = getNextWorkingDateIso_(now, 2, timeZone);
-    const useExisting  = (existingDlObj.dateObj && existingIsoDeadline > minWaitIso);
-    const finalDateObj = useExisting ? existingDlObj.dateObj : shiftDateObj;
-    const finalHasTime = useExisting ? existingDlObj.hasTime : false;
-    const finalDisp    = Utilities.formatDate(finalDateObj, timeZone, finalHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+  // === ВЕТКА 3Б: СДВИГ СПРОСА / КУПИЛ У ДРУГИХ / СЕЗОН (ВЕСНА, ЛЕТО, ОСЕНЬ, ЗИМА) ===
+  // Разделены: «Сдвиг спроса», «Купил у других» и 4 сезона («Сезон: Весна», «Сезон: Лето», «Сезон: Осень», «Сезон: Зима»).
+  // Если в L вручную выставлена будущая дата — сохраняем её (с защитой от Сб/Вс и свалки в один день)!
+  const isBoughtOther = decision.includes("купил") || decision.includes("конкурент");
+  const isSeason      = decision.includes("сезон") || decision.includes("весн") || decision.includes("лет") || decision.includes("осен") || decision.includes("зим") || decision.includes("след. год") || decision.includes("в этом году");
+  const isShiftDemand = decision.includes("сдвиг") || isBoughtOther || isSeason;
 
-    const tag = `[🔄 Сдвиг / Купил у других${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
+  if (isShiftDemand) {
+    const todayIso = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+    const useExisting = (existingDlObj.dateObj && existingIsoDeadline > todayIso);
+
+    let baseTargetDateObj;
+    let actionHeader = "🔄 Сдвиг спроса";
+
+    if (isSeason) {
+      const seasonInfo = getSeasonalStartDateObj_(now, decision);
+      baseTargetDateObj = seasonInfo.dateObj;
+      actionHeader = seasonInfo.label;
+    } else if (isBoughtOther) {
+      const boughtDays = isWhaleSheet ? 14 : 30;
+      baseTargetDateObj = getNextWorkingDateObj_(now, boughtDays);
+      actionHeader = "🛒 Купил у других";
+    } else {
+      const shiftDays = isWhaleSheet ? 10 : 14;
+      baseTargetDateObj = getNextWorkingDateObj_(now, shiftDays);
+      actionHeader = "🔄 Сдвиг спроса";
+    }
+
+    const destSheetForBalance = (sheetName === "3. Лист ожидания" || isWhaleSheet)
+      ? sheet
+      : (getSheetByNameSafe(ss, "3. Лист ожидания") || sheet);
+
+    const rawCandidateDate = useExisting ? existingDlObj.dateObj : baseTargetDateObj;
+    const finalHasTime     = useExisting ? existingDlObj.hasTime : false;
+    const finalDateObj     = finalHasTime
+      ? shiftWeekendToMonday_(rawCandidateDate)
+      : getSmartBalancedDeadlineObj_(destSheetForBalance, rawCandidateDate, timeZone, destSheetForBalance === sheet ? row : -1);
+    const finalDisp        = Utilities.formatDate(finalDateObj, timeZone, finalHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+
+    const tag = `[${actionHeader}${needSnapshot} (след. контакт: ${finalDisp}) - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, tag);
 
     if (sheetName === "3. Лист ожидания" || isWhaleSheet) {
@@ -367,7 +411,7 @@ function handleCallingSheetEdit(e, sheet) {
       sheet.getRange(row, 13).clearContent();
       refreshSingleRowTactic_(sheet, row);
       moveRowToBottom_(sheet, row);
-      ss.toast(`Запрос H+I+J сохранен в Историю (N), H = «Нет», след. контакт: ${finalDisp}!`, "🔄 Сдвиг спроса", 5);
+      ss.toast(`${actionHeader}: запрос H+I+J сохранен в Историю (N), H = «Нет», след. контакт: ${finalDisp}!`, actionHeader, 5);
     } else {
       const targetSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
       if (!targetSheet) return ss.toast("Ошибка: лист Ожидания не найден", "Ошибка");
@@ -381,7 +425,7 @@ function handleCallingSheetEdit(e, sheet) {
       refreshSingleRowTactic_(targetSheet, mergeRes.row);
       sheet.deleteRow(row);
       highlightDuplicateInnsOnSheet_(sheet);
-      ss.toast(`«${company || inn}» переведён в Лист ожидания (дедлайн: ${finalDisp})!`, "🔄 В Ожидание", 5);
+      ss.toast(`«${company || inn}» переведён в Лист ожидания (${actionHeader}, дедлайн: ${finalDisp})!`, actionHeader, 5);
     }
     return;
   }
@@ -393,9 +437,17 @@ function handleCallingSheetEdit(e, sheet) {
     const defaultWaitObj = getNextWorkingDateObj_(now, defaultWaitDays);
     const todayIso = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
     const useExisting = (existingDlObj.dateObj && existingIsoDeadline > todayIso);
-    const targetDateObj = useExisting ? existingDlObj.dateObj : defaultWaitObj;
-    const targetHasTime = useExisting ? existingDlObj.hasTime : false;
-    const targetDisp    = Utilities.formatDate(targetDateObj, timeZone, targetHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
+
+    const destSheetForBalance = (sheetName === "3. Лист ожидания" || isWhaleSheet)
+      ? sheet
+      : (getSheetByNameSafe(ss, "3. Лист ожидания") || sheet);
+
+    const rawCandidateDate = useExisting ? existingDlObj.dateObj : defaultWaitObj;
+    const targetHasTime    = useExisting ? existingDlObj.hasTime : false;
+    const targetDateObj    = targetHasTime
+      ? shiftWeekendToMonday_(rawCandidateDate)
+      : getSmartBalancedDeadlineObj_(destSheetForBalance, rawCandidateDate, timeZone, destSheetForBalance === sheet ? row : -1);
+    const targetDisp       = Utilities.formatDate(targetDateObj, timeZone, targetHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
     const reconSnap = buildNeedSnapshot_(need, pipeType, application, "Берут в работу");
     const actionLabel = isWhaleSheet ? `🐋 Плановый контакт с Китом (Нет текущей потребности)` : `⏳ В Ожидание`;
@@ -428,12 +480,13 @@ function handleCallingSheetEdit(e, sheet) {
     sheet.deleteRow(row);
     highlightDuplicateInnsOnSheet_(sheet);
     const msgAction = mergeRes.merged ? "объединён с карточкой" : "перенесён";
-    ss.toast(`«${company || inn}» ${msgAction} в Ожидание! Разведка (H+I+J) сохранена в Историю (N), H = «Нет», I и J очищены.`, "⏳ В Ожидание", 5);
+    ss.toast(`«${company || inn}» ${msgAction} в Ожидание! Разведка (H+I+J) сохранена в Историю (N), H = «Нет», дедлайн: ${targetDisp}.`, "⏳ В Ожидание", 5);
     return;
   }
 
-  // === ВЕТКА 4: НЕДОЗВОН (Каскад 1 -> 3 -> 7 дней; Киты защищены от авто-сброса в Архив на 4/4!) ===
+  // === ВЕТКА 4: НЕДОЗВОН (Каскад 1 -> 3 -> 7 дней; Ожидание и Киты защищены от авто-сброса в Архив на 4/4!) ===
   if (decision.includes("недозвон") || decision.includes("не дозвон") || decision.includes("сброс") || decision.includes("не берет")) {
+    const isProtectedFromAutoArchive = isWhaleSheet || (sheetName === "3. Лист ожидания");
     const match = history.match(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/i);
     let attempts = match ? parseInt(match[1], 10) : 0;
     attempts += 1;
@@ -443,11 +496,12 @@ function handleCallingSheetEdit(e, sheet) {
       ? history.replace(/\[(?:📞\s*)?Недозвон:\s*\d+\/4(?:\s*-\s*[^\]]+)?\]/i, callTag)
       : prependHistoryLog_(history, callTag);
 
-    if (attempts < 4 || isWhaleSheet) {
+    if (attempts < 4 || isProtectedFromAutoArchive) {
       const stepDaysMap = { 1: 1, 2: 3, 3: 7 };
-      const stepDays = stepDaysMap[attempts] || 7;
-      const nextCallDateObj = getNextWorkingDateObj_(now, stepDays);
-      const nextCallStr     = Utilities.formatDate(nextCallDateObj, timeZone, "dd.MM.yyyy");
+      const stepDays = stepDaysMap[attempts] || (sheetName === "3. Лист ожидания" ? 14 : 7);
+      const rawNextCallDateObj = getNextWorkingDateObj_(now, stepDays);
+      const nextCallDateObj    = getSmartBalancedDeadlineObj_(sheet, rawNextCallDateObj, timeZone, row);
+      const nextCallStr        = Utilities.formatDate(nextCallDateObj, timeZone, "dd.MM.yyyy");
 
       sheet.getRange(row, 14).setValue(updatedHistory);
       setDeadlineCellDate_(sheet, row, nextCallDateObj, false);
@@ -455,8 +509,9 @@ function handleCallingSheetEdit(e, sheet) {
       if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
 
       moveRowToBottom_(sheet, row);
-      if (isWhaleSheet && attempts >= 4) {
-        ss.toast(`🐋 Кит НЕ удаляется в Архив при недозвоне (${attempts}/4)! Сдвинут вниз на ${nextCallStr} — проверьте мессенджер/общий номер.`, "🐋 Защита Кита", 6);
+      if (isProtectedFromAutoArchive && attempts >= 4) {
+        const protectTitle = isWhaleSheet ? "🐋 Защита Кита" : "⏳ Защита Ожидания";
+        ss.toast(`Клиент НЕ удаляется в Архив при недозвоне (${attempts}/4)! Сдвинут вниз на ${nextCallStr} (шаг +${stepDays} дн.) — прогревочная база сохранена.`, protectTitle, 6);
       } else {
         ss.toast(`Недозвон (${attempts}/4, шаг +${stepDays} дн.). Дедлайн: ${nextCallStr}. Строка опущена вниз!`, "📞 Недозвон", 4);
       }
@@ -480,10 +535,11 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  // === ВЕТКА 5: ФУНДАМЕНТАЛЬНЫЕ ОТКАЗЫ / НЕ ЦЕЛЕВОЙ / ТОКСИЧНЫЙ ДЕМПИНГ -> в «4.Архив лидов» ===
+  // === ВЕТКА 5: ФУНДАМЕНТАЛЬНЫЕ ОТКАЗЫ / ЗАКРЫЛИСЬ / НЕ ЦЕЛЕВОЙ / ТОКСИЧНЫЙ ДЕМПИНГ -> в «4.Архив лидов» ===
   const isToxic     = decision.includes("токсич") || decision.includes("демпинг") || decision.includes("террор");
   const isNotTarget = decision.includes("не целев") || decision.includes("нецелев");
-  const isRefusal   = decision.includes("отказ") || decision.includes("архив") || decision.includes("закрыл") || decision.includes("удалит") || decision.includes("слил");
+  const isClosed    = decision.includes("закрыл") || decision.includes("ликвидир") || decision.includes("банкрот");
+  const isRefusal   = isClosed || decision.includes("отказ") || decision.includes("архив") || decision.includes("удалит") || decision.includes("слил");
 
   if (isToxic || isNotTarget || isRefusal) {
     const targetSheet = getSheetByNameSafe(ss, "4.Архив лидов");
@@ -497,6 +553,9 @@ function handleCallingSheetEdit(e, sheet) {
     } else if (isNotTarget) {
       reasonText = "Не целевой";
       icon = "🚫";
+    } else if (isClosed) {
+      reasonText = "Отказ (Закрылись)";
+      icon = "⛔";
     }
 
     const archiveTag = `[${icon} В Архив: ${reasonText}${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
@@ -605,33 +664,173 @@ function processRawNoteIntoDossier_(sheet, row, oldVal) {
 }
 
 function extractSmartSummaryFromNote_(latestText, fullDossierText) {
-  const combinedSource = `${fullDossierText || ''} ${latestText || ''}`;
-  const lower = combinedSource.toLowerCase();
-  const tags = [];
-
-  if (/весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(lower))   tags.push('⚖️ ВЕСЫ: +10% на допуск!');
-  if (/тендер|торг|аукцион|закупк|44-фз|223-фз|аст|ртс/i.test(lower)) tags.push('🏛️ Тендеры');
-  if (/аккредитац|реестр|сб\b|служб.*безопасн/i.test(lower))          tags.push('📑 Аккредитация');
-  if (/отсрочк|постоплат|аванс|финансир|нет денег|бюджет/i.test(lower)) tags.push('💳 Финансы/Отсрочка');
-  if (/прокол|гнб|футляр|гильз/i.test(lower))                        tags.push('🛠️ Прокол/Футляр');
-  if (/обсад|скважин|бур/i.test(lower))                              tags.push('💧 Обсадка/Бурение');
-  if (/сваи|свай|опор|мост/i.test(lower))                            tags.push('🏗️ Сваи/Опоры');
-
-  const diams = extractCleanPipeDiams_(combinedSource);
-  if (diams.length > 0) {
-    tags.push(`Ø ${diams.slice(0, 5).join(',')}`);
-  }
-
-  const cleanLine = String(latestText || '').replace(/\n+/g, ' ').replace(/^📌\s*/, '').trim();
+  const cleanLine = String(latestText || '')
+    .replace(/\n+/g, ' ')
+    .replace(/^📌\s*(?:[^|]+\|\s*)?/, '')
+    .trim();
   const shortPhrase = cleanLine.length > 95 ? cleanLine.slice(0, 92).trim() + '…' : cleanLine;
+  return shortPhrase ? `📌 ${shortPhrase}` : '';
+}
 
-  if (tags.length > 0) {
-    return `📌 ${tags.join(' • ')} | ${shortPhrase}`;
+
+// =================================================================
+// ЕДИНЫЕ ЧИСТЫЕ ВЫПАДАЮЩИЕ СПИСКИ (G: Сфера, I: Тип трубы, J: Под что берут, M: Решение)
+// Строго по одному чистому названию на пункт (без склеек через «/»).
+// ВНИМАНИЕ: Если вы добавите или удалите пункты прямо в Google Таблице (Данные -> Настроить проверку данных),
+// скрипт НЕ будет затирать ваши новые пункты, а автоматически подхватит и сохранит их!
+// =================================================================
+
+const CRM_SPHERES_LIST_ = [
+  "Строительство",
+  "Бурение",
+  "ГНБ",
+  "Водоканал",
+  "ЖКХ",
+  "Теплосети",
+  "Энергетика",
+  "Газификация",
+  "Дорожное строительство",
+  "Мостостроение",
+  "Гидротехника",
+  "Фундаментостроение",
+  "Карьер",
+  "ГОК",
+  "Дноуглубление",
+  "Металлоконструкции",
+  "Промышленность",
+  "Машиностроение",
+  "Агропром",
+  "Нефтегаз",
+  "Металлобаза",
+  "Комплектация",
+  "Другое"
+];
+
+const CRM_PIPE_TYPES_LIST_ = [
+  "Новая",
+  "Лежалая",
+  "Восстановленная",
+  "Б/у",
+  "НКТ"
+];
+
+const CRM_APPLICATIONS_LIST_ = [
+  "Сваи",
+  "Шпунт",
+  "Распорки",
+  "Опоры",
+  "Колонны",
+  "Фермы",
+  "Металлоконструкции",
+  "Мачты",
+  "Прокол",
+  "Футляр",
+  "Гильза",
+  "Обсадка",
+  "Кондуктор",
+  "Водопровод",
+  "Канализация",
+  "Водоотведение",
+  "Теплотрасса",
+  "Паропровод",
+  "Газопровод",
+  "Пульпопровод",
+  "Шламопровод",
+  "Земснаряд",
+  "Понтоны",
+  "Причалы",
+  "Водопропуск",
+  "Дренаж",
+  "Котлы",
+  "Печи",
+  "Ролики",
+  "Барабаны",
+  "Забор",
+  "Ограждения",
+  "Стойки",
+  "Перепродажа",
+  "Тендер"
+];
+
+const WAITING_DECISIONS_LIST_ = [
+  "Горящая заявка (В просчет)",
+  "В Ожидание (Нет потребности)",
+  "Сдвиг спроса",
+  "Купил у других",
+  "Сезон: Весна",
+  "Сезон: Лето",
+  "Сезон: Осень",
+  "Сезон: Зима",
+  "Перезвонить сегодня",
+  "Недозвон",
+  "Проход секретаря (Выбить ЛПР)",
+  "Отказ (Закрылись)",
+  "Не целевой",
+  "Токсичный демпинг"
+];
+
+/**
+ * Аккуратно обновляет выпадающие списки, сохраняя любые новые пункты без «/», которые вы добавили вручную в Таблице!
+ */
+function updateListValidationPreservingStyle_(range, baseItems, preserveCustomCleanItems) {
+  const existingRule = range.getCell(1, 1).getDataValidation();
+  let finalItems = baseItems.slice();
+
+  if (existingRule && existingRule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.VALUE_IN_LIST) {
+    const args = existingRule.getCriteriaValues();
+    const curList = (args && args[0]) ? args[0] : [];
+
+    // Если вы сами добавили в Таблице новую чистую сферу или назначение (без старых склеек через «/») — бережно сохраняем её!
+    if (preserveCustomCleanItems) {
+      curList.forEach(item => {
+        const clean = String(item || '').trim();
+        if (clean && !clean.includes('/') && !clean.includes('(') && !finalItems.includes(clean)) {
+          finalItems.push(clean);
+        }
+      });
+    }
+
+    const isSame = curList.length === finalItems.length && curList.every((v, idx) => v === finalItems[idx]);
+    if (isSame) return;
+
+    const showDrp = args && args.length > 1 ? Boolean(args[1]) : true;
+    const rebuilt = existingRule.copy()
+      .requireValueInList(finalItems, showDrp)
+      .setAllowInvalid(true)
+      .build();
+    range.setDataValidation(rebuilt);
+    return;
   }
-  return `📌 ${shortPhrase}`;
+
+  const freshRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(finalItems, true)
+    .setAllowInvalid(true)
+    .build();
+  range.setDataValidation(freshRule);
+}
+
+function setupCleanDropdownsOnSheetSilent_(sheet) {
+  if (!sheet) return;
+  const sheetName = sheet.getName().trim();
+  const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания"];
+  if (!crmSheets.includes(sheetName)) return;
+
+  const maxRows = Math.max(sheet.getLastRow(), 50);
+  const numRows = maxRows - 1;
+  if (numRows < 1) return;
+
+  updateListValidationPreservingStyle_(sheet.getRange(2, 7, numRows, 1), CRM_SPHERES_LIST_, true);
+  updateListValidationPreservingStyle_(sheet.getRange(2, 9, numRows, 1), CRM_PIPE_TYPES_LIST_, true);
+  updateListValidationPreservingStyle_(sheet.getRange(2, 10, numRows, 1), CRM_APPLICATIONS_LIST_, true);
+
+  // В «1. Обзвон (База)» колонку M (Решение) НЕ трогаем (там уже идеальный список)!
+  if (sheetName === "3. Лист ожидания") {
+    updateListValidationPreservingStyle_(sheet.getRange(2, 13, numRows, 1), WAITING_DECISIONS_LIST_, false);
+  }
 }
 
 function syncUnpackedNotesOnSheetSilent_(sheet) {
+  try { setupCleanDropdownsOnSheetSilent_(sheet); } catch (e) {}
   if (!sheet) return;
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
@@ -643,7 +842,7 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
   for (let i = 0; i < numRows; i++) {
     const rawK = String(kVals[i][0] || '').trim();
     const noteB = String(bNotes[i][0] || '').trim();
-    if (rawK && (!noteB || !rawK.startsWith('📌'))) {
+    if (rawK && (!noteB || !rawK.startsWith('📌') || rawK.includes('|'))) {
       processRawNoteIntoDossier_(sheet, i + 2);
     }
   }
@@ -1085,13 +1284,101 @@ function prependHistoryLog_(existingHistory, newTag) {
   return `${newTag}\n${cleanHist}`;
 }
 
+function shiftWeekendToMonday_(dateObj) {
+  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return dateObj;
+  const d = new Date(dateObj.getTime());
+  const day = d.getDay();
+  if (day === 6) d.setDate(d.getDate() + 2);
+  else if (day === 0) d.setDate(d.getDate() + 1);
+  return d;
+}
+
 function getNextWorkingDateObj_(baseDate, addDays) {
   const nextDate = new Date(baseDate.getTime());
   nextDate.setHours(0, 0, 0, 0);
   nextDate.setDate(nextDate.getDate() + addDays);
-  if (nextDate.getDay() === 6) nextDate.setDate(nextDate.getDate() + 2);
-  else if (nextDate.getDay() === 0) nextDate.setDate(nextDate.getDate() + 1);
-  return nextDate;
+  return shiftWeekendToMonday_(nextDate);
+}
+
+/**
+ * Определяет стартовую рабочую дату для сезонов: Весна (1 марта), Лето (1 июня), Осень (1 сентября), Зима (1 декабря)
+ */
+function getSeasonalStartDateObj_(baseDate, decisionLower) {
+  const y = baseDate.getFullYear();
+  const m = baseDate.getMonth(); // 0..11
+  let targetMonth = 2; // По умолчанию Весна (Март = 2)
+  let label = "🌱 Сезон: Весна";
+
+  if (decisionLower.includes("лет")) {
+    targetMonth = 5; // Июнь
+    label = "☀️ Сезон: Лето";
+  } else if (decisionLower.includes("осен")) {
+    targetMonth = 8; // Сентябрь
+    label = "🍂 Сезон: Осень";
+  } else if (decisionLower.includes("зим")) {
+    targetMonth = 11; // Декабрь
+    label = "❄️ Сезон: Зима";
+  } else if (decisionLower.includes("весн")) {
+    targetMonth = 2; // Март
+    label = "🌱 Сезон: Весна";
+  } else {
+    // Если просто «Не сезон / В след. году» — ставим на 1 марта следующего сезона
+    targetMonth = 2;
+    label = "🌱 Не сезон (Весна)";
+  }
+
+  let targetYear = y;
+  const candidate = new Date(targetYear, targetMonth, 1, 0, 0, 0);
+  // Если 1-е число выбранного сезона уже прошло или наступит меньше чем через 10 дней — берем следующий год
+  if (candidate.getTime() <= baseDate.getTime() + 10 * 24 * 60 * 60 * 1000) {
+    targetYear += 1;
+  }
+
+  const finalSeasonDate = shiftWeekendToMonday_(new Date(targetYear, targetMonth, 1, 0, 0, 0));
+  return { dateObj: finalSeasonDate, label: label };
+}
+
+/**
+ * Умный балансировщик дедлайнов:
+ * 1) Сдвигает Сб/Вс на Понедельник.
+ * 2) Проверяет загрузку выбранной даты на листе: если на этот день уже назначено >= MAX_CALLS_PER_DAY_ (10) компаний,
+ *    автоматически шагает на следующий рабочий день, чтобы не сваливать всех клиентов в один день!
+ */
+function getSmartBalancedDeadlineObj_(sheet, targetDateObj, timeZone, excludeRow, customMaxPerDay) {
+  let candidate = shiftWeekendToMonday_(targetDateObj);
+  if (!sheet || !(candidate instanceof Date) || isNaN(candidate.getTime())) return candidate;
+
+  const tz = timeZone || "Europe/Moscow";
+  const maxPerDay = customMaxPerDay || MAX_CALLS_PER_DAY_;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return candidate;
+
+  const dlValues = sheet.getRange(2, 12, lastRow - 1, 1).getValues();
+  const countByIso = {};
+
+  for (let i = 0; i < dlValues.length; i++) {
+    const rNum = i + 2;
+    if (excludeRow && rNum === excludeRow) continue;
+    const cellVal = dlValues[i][0];
+    if (!cellVal) continue;
+    const parsed = parseDeadlineObj_(cellVal, tz);
+    if (parsed.isoDate) {
+      countByIso[parsed.isoDate] = (countByIso[parsed.isoDate] || 0) + 1;
+    }
+  }
+
+  let safety = 0;
+  while (safety < 60) {
+    const iso = Utilities.formatDate(candidate, tz, "yyyy-MM-dd");
+    if ((countByIso[iso] || 0) < maxPerDay) {
+      return candidate;
+    }
+    candidate = new Date(candidate.getTime());
+    candidate.setDate(candidate.getDate() + 1);
+    candidate = shiftWeekendToMonday_(candidate);
+    safety++;
+  }
+  return candidate;
 }
 
 function getNextWorkingDateIso_(baseDate, addDays, timeZone) {
@@ -1155,7 +1442,7 @@ function insertOrMergeRowByInn_(targetSheet, rowValues, incomingDossierNote) {
       rowValues[8] || oldRow[8],
       rowValues[9] || oldRow[9],
       mergeUniqueLines_(oldRow[10], rowValues[10], ' | '),
-      rowValues[11] || oldRow[11],
+      shiftWeekendToMonday_(rowValues[11] || oldRow[11]),
       "",
       prependHistoryLog_(oldRow[13], rowValues[13])
     ];
@@ -1234,8 +1521,9 @@ function setDeadlineCellDate_(sheet, row, dateObj, hasTime) {
     cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
     return;
   }
+  const safeDateObj = shiftWeekendToMonday_(dateObj);
   cell.setNumberFormat(hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
-  cell.setValue(dateObj);
+  cell.setValue(safeDateObj);
   updateSingleRowDeadlineHighlight_(sheet, row);
 }
 

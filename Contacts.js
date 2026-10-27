@@ -229,7 +229,7 @@ function createFreshContactResource_(profile, meta) {
   return {
     names: [{ givenName: givenName, familyName: '' }],
     organizations: meta.company ? [{ name: meta.company, title: profile.personName ? 'ЛПР' : 'Контакт' }] : [],
-    addresses: meta.city ? [{ city: meta.city, type: 'work' }] : [],
+    addresses: meta.city ? [{ streetAddress: meta.city, formattedValue: meta.city, type: 'work' }] : [],
     emailAddresses: profile.emails,
     phoneNumbers: profile.phones,
     biographies: bioText ? [{ value: bioText, contentType: 'TEXT_PLAIN' }] : []
@@ -297,14 +297,15 @@ function mergeContactData_(existingContact, profile, meta) {
   const existingOrgName = (existingContact.organizations && existingContact.organizations[0] && existingContact.organizations[0].name)
     ? existingContact.organizations[0].name.trim()
     : '';
-  const existingCity = (existingContact.addresses && existingContact.addresses[0] && existingContact.addresses[0].city)
-    ? existingContact.addresses[0].city.trim()
+  const existingAddrObj = (existingContact.addresses && existingContact.addresses[0]) ? existingContact.addresses[0] : null;
+  const existingCity = existingAddrObj
+    ? String(existingAddrObj.streetAddress || existingAddrObj.formattedValue || existingAddrObj.city || '').trim()
     : '';
 
   const phonesChanged = mergedPhones.length !== (existingContact.phoneNumbers || []).length;
   const emailsChanged = mergedEmails.length !== (existingContact.emailAddresses || []).length;
   const orgChanged    = finalCompany !== existingOrgName || (existingContact.organizations || []).length > 1;
-  const cityChanged   = Boolean(meta.city && meta.city !== existingCity);
+  const cityChanged   = Boolean(meta.city && (meta.city !== existingCity || (existingAddrObj && !existingAddrObj.streetAddress)));
 
   const hasChanges = (finalGivenName !== existingGiven) ||
                      orgChanged ||
@@ -319,7 +320,7 @@ function mergeContactData_(existingContact, profile, meta) {
       etag: existingContact.etag,
       names: [{ givenName: finalGivenName, familyName: '' }],
       organizations: finalCompany ? [{ name: finalCompany, title: finalPersonName ? 'ЛПР' : 'Контакт' }] : [],
-      addresses: meta.city ? [{ city: meta.city, type: 'work' }] : (existingContact.addresses || []),
+      addresses: meta.city ? [{ streetAddress: meta.city, formattedValue: meta.city, type: 'work' }] : (existingContact.addresses || []),
       emailAddresses: mergedEmails,
       phoneNumbers: mergedPhones,
       biographies: finalBio ? [{ value: finalBio, contentType: 'TEXT_PLAIN' }] : []

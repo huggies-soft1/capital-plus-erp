@@ -150,7 +150,7 @@ function getClientsAndActiveSelection_(ss) {
           phone: phRaw.split('\n')[0] || '',
           emailStr: emList.join(', '),
           emailList: emList,
-          sphere: sphere,
+          sphere: [sphere, pApp, pType].filter(Boolean).join(' • '),
           need: (need && need.toLowerCase() !== 'нет' && need !== '—') ? need : '',
           pipeType: pType,
           application: pApp,
@@ -556,7 +556,7 @@ function logClientPriceAction(payload) {
         }
       }
 
-      if (client.sheet.trim() === "3. Лист ожидания" && typeof refreshSingleRowTactic_ === 'function') {
+      if ((typeof isSheetWithStockMonitor_ === 'function' ? isSheetWithStockMonitor_(client.sheet) : (client.sheet.trim() === "3. Лист ожидания" || client.sheet.trim() === "2. Золотой список (Киты)")) && typeof refreshSingleRowTactic_ === 'function') {
         refreshSingleRowTactic_(targetSheet, client.row);
       }
 
@@ -1104,7 +1104,7 @@ ${userSignature.html}
               }
             }
 
-            if (client.sheet.trim() === "3. Лист ожидания" && typeof refreshSingleRowTactic_ === 'function') {
+            if ((typeof isSheetWithStockMonitor_ === 'function' ? isSheetWithStockMonitor_(client.sheet) : (client.sheet.trim() === "3. Лист ожидания" || client.sheet.trim() === "2. Золотой список (Киты)")) && typeof refreshSingleRowTactic_ === 'function') {
               refreshSingleRowTactic_(targetSheet, client.row);
             }
           }
