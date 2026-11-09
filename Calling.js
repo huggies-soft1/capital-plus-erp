@@ -356,7 +356,8 @@ function handleCallingSheetEdit(e, sheet) {
       : getSmartBalancedDeadlineObj_(targetSheet, rawCandidateDate, timeZone, -1);
     const targetDisp       = Utilities.formatDate(targetDateObj, timeZone, targetHasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy");
 
-    const demoteTag = `[📉 Из Китов в Ожидание: Разовая покупка${needSnapshot} (след. контакт: ${targetDisp}) - ${nowStr}]`;
+    const whale1CSnap = isWhaleSheet ? buildWhale1CHistorySnapshot_(sheet, row) : "";
+    const demoteTag = `[📉 Из Китов в Ожидание: Разовая покупка${whale1CSnap}${needSnapshot} (след. контакт: ${targetDisp}) - ${nowStr}]`;
     const updatedHistory = prependHistoryLog_(history, demoteTag);
 
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
@@ -554,14 +555,21 @@ function handleCallingSheetEdit(e, sheet) {
   // === ВЕТКА 4: НЕДОЗВОН (Каскад 1 -> 3 -> 7 дней; Ожидание и Киты защищены от авто-сброса в Архив на 4/4!) ===
   if (decision.includes("недозвон") || decision.includes("не дозвон") || decision.includes("сброс") || decision.includes("не берет")) {
     const isProtectedFromAutoArchive = isWhaleSheet || (sheetName === "3. Лист ожидания");
-    const match = history.match(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/i);
-    let attempts = match ? parseInt(match[1], 10) : 0;
+    const allMissMatches = Array.from(history.matchAll(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/gi));
+    let attempts = 0;
+    if (allMissMatches.length > 0) {
+      attempts = Math.max(...allMissMatches.map(m => parseInt(m[1], 10) || 0));
+    } else {
+      const legacyMatch = history.match(/(?:^|\n|\[)\s*(\d+)\s*недозвон/i);
+      if (legacyMatch) attempts = parseInt(legacyMatch[1], 10) || 0;
+    }
     attempts += 1;
 
     const callTag = `[📞 Недозвон: ${attempts}/4 - ${nowStr}]`;
-    let updatedHistory = match
-      ? history.replace(/\[(?:📞\s*)?Недозвон:\s*\d+\/4(?:\s*-\s*[^\]]+)?\]/i, callTag)
-      : prependHistoryLog_(history, callTag);
+    const cleanedPrevHistory = history
+      .replace(/\[(?:📞\s*)?Недозвон:\s*\d+\/4(?:\s*-\s*[^\]]+)?\]\s*\n?/gi, '')
+      .trim();
+    let updatedHistory = prependHistoryLog_(cleanedPrevHistory, callTag);
 
     if (attempts < 4 || isProtectedFromAutoArchive) {
       const stepDaysMap = { 1: 1, 2: 3, 3: 7 };
@@ -625,7 +633,8 @@ function handleCallingSheetEdit(e, sheet) {
       icon = "⛔";
     }
 
-    const archiveTag = `[${icon} В Архив: ${reasonText}${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
+    const whale1CSnap = isWhaleSheet ? buildWhale1CHistorySnapshot_(sheet, row) : "";
+    const archiveTag = `[${icon} В Архив: ${reasonText}${whale1CSnap}${needSnapshot} (из «${sheetName}») - ${nowStr}]`;
     const finalArchiveHistory = prependHistoryLog_(history, archiveTag);
 
     const mergeRes = insertOrMergeRowByInn_(targetSheet, [
@@ -965,8 +974,26 @@ function ensureWhaleColumnsAndSegments_(sheet) {
     sheet.setColumnWidth(19, 360);
   }
 
-  autoMigrateAndCleanWhalesV67_(sheet.getParent(), false);
+  // ВНИМАНИЕ: Однократная авто-миграция autoMigrateAndCleanWhalesV67_ отключена от onOpen,
+  // чтобы при удалении/переводе строк на листе «Киты» старый массив никогда не перезатер живую базу!
   recalculateWhaleSegmentsOnSheet_(sheet);
+}
+
+/**
+ * Формирует слепок 1С (Тоннаж Q + Выручка R + Что брали в 1С S) при переводе Кита в Ожидание или Архив,
+ * чтобы данные 1С никогда не терялись при удалении строки с 19-колоночного листа Китов.
+ */
+function buildWhale1CHistorySnapshot_(sheet, row) {
+  if (!sheet || sheet.getMaxColumns() < 19 || row < 2) return "";
+  const qrs = sheet.getRange(row, 17, 1, 3).getValues()[0];
+  const tn = parseWhaleMetricNumber_(qrs[0]);
+  const rev = parseWhaleMetricNumber_(qrs[1]);
+  const s1c = String(qrs[2] || "").trim();
+  const parts = [];
+  if (tn > 0) parts.push(`${Number(tn.toFixed(2))} тн`);
+  if (rev > 0) parts.push(`${Math.round(rev).toLocaleString('ru-RU')} ₽`);
+  if (s1c && !s1c.includes("отгрузок по этому ИНН нет")) parts.push(s1c);
+  return parts.length > 0 ? ` | 1С: ${parts.join(' • ')}` : "";
 }
 
 function recalculateWhaleSegmentsOnSheet_(sheet) {
@@ -1121,9 +1148,10 @@ function getAvailableStockDiamsMap_(ss) {
       if (!stockByDiam[diam]) stockByDiam[diam] = [];
       let condShort = 'Б/у';
       const cl = condRaw.toLowerCase();
-      if (cl.includes('нов')) condShort = 'Нов.';
+      if (cl.includes('восст')) condShort = 'Восст.';
       else if (cl.includes('леж')) condShort = 'Леж.';
-      else if (cl.includes('восст')) condShort = 'Восст.';
+      else if (cl.includes('нкт')) condShort = 'НКТ';
+      else if (cl.includes('нов')) condShort = 'Нов.';
 
       const qtyStr = stockTn > 0 ? `${Number(stockTn.toFixed(1))}т` : `${Math.round(stockM)}м`;
       const prStr  = priceTn > 0 ? ` — ${priceTn.toLocaleString('ru-RU')} ₽` : '';
@@ -1210,6 +1238,9 @@ function formatPipeNeed_(rawInput) {
   if (!str) return "";
   if (str.toLowerCase() === 'нет' || str === '—' || str === '-') return "Нет";
 
+  // Убираем лишнее слово «Труба» перед диаметрами (например: «Труба 108х6 Труба 159х6» -> «108х6, 159х6»)
+  str = str.replace(/\bтруб[аы]\s+(?=\d{2,4})/gi, '');
+
   const diamSet = new Set(STANDARD_PIPE_DIAMS_);
 
   str = str.replace(/(\d{2,4})\s*[\*\/xXхХ\-]\s*(\d{1,2}(?:[.,]\d+)?)/g, '$1х$2');
@@ -1293,7 +1324,8 @@ function matchWarehouseWithWaitingList() {
     syncUnpackedNotesOnSheetSilent_(sh);
 
     const lRow = sh.getLastRow();
-    const data = sh.getRange(2, 1, lRow - 1, 14).getValues();
+    const readCols = Math.min(19, Math.max(14, sh.getLastColumn()));
+    const data = sh.getRange(2, 1, lRow - 1, readCols).getValues();
     const compNotes = sh.getRange(2, 2, lRow - 1, 1).getNotes();
     const needBgColors = [];
     const tacticsCol = [];
@@ -1305,6 +1337,7 @@ function matchWarehouseWithWaitingList() {
       const needStr = String(r[7] || '').trim();
       const notes   = String(r[10] || '').trim();
       const histStr = String(r[13] || '').trim();
+      const s1cStr  = readCols >= 19 ? String(r[18] || '').trim() : '';
       const dossier = String((compNotes[idx] && compNotes[idx][0]) || '').trim();
 
       tacticsCol.push([computeDynamicTacticForRow_(r, stockByDiam, dossier)]);
@@ -1324,7 +1357,7 @@ function matchWarehouseWithWaitingList() {
 
       needBgColors.push([null]);
 
-      const combinedPast = `${histStr} ${notes} ${dossier}`;
+      const combinedPast = `${histStr} ${notes} ${dossier} ${s1cStr}`;
       const pastDiams = extractCleanPipeDiams_(combinedPast).filter(d => stockByDiam[d]);
 
       if (pastDiams.length > 0) {
@@ -1482,14 +1515,24 @@ function checkInnAcrossAllSheets_(ss, currentSheetName, currentRow, targetInn) {
     const lRow = sh.getLastRow();
     if (lRow < 2) return;
 
-    const data = sh.getRange(2, 1, lRow - 1, 2).getValues();
+    const maxC = Math.min(19, Math.max(14, sh.getLastColumn()));
+    const data = sh.getRange(2, 1, lRow - 1, maxC).getValues();
+    const bNotes = sh.getRange(2, 2, lRow - 1, 1).getNotes();
     data.forEach((r, idx) => {
       const rNum = idx + 2;
       if (sName === currentSheetName && rNum === currentRow) return;
       const cellInn = String(r[0] || '').replace(/\D/g, '');
+      const compName = String(r[1] || 'Без названия').trim();
       if (cellInn === targetInn) {
-        const compName = String(r[1] || 'Без названия').trim();
         matches.push(`«${sName}» (стр. ${rNum}: ${compName})`);
+        return;
+      }
+      // Проверяем, не указан ли этот ИНН как связанное юрлицо одного собственника в Примечании (K), Досье (B) или 1С (S)
+      const kText = String(r[10] || '');
+      const sText = maxC >= 19 ? String(r[18] || '') : '';
+      const dText = String((bNotes[idx] && bNotes[idx][0]) || '');
+      if (`${kText} ${sText} ${dText}`.includes(targetInn)) {
+        matches.push(`🔗 Связанное юрлицо в «${sName}» (стр. ${rNum}: ${compName}, осн. ИНН ${cellInn || '—'})`);
       }
     });
   });
@@ -2140,12 +2183,11 @@ function autoMigrateAndCleanWhalesV67_(ss, forceRun) {
   const whaleSheet = getSheetByNameSafe(ss, "2. Золотой список (Киты)");
   if (!whaleSheet) return;
 
-  // Проверяем, выполнена ли уже миграция на Вариант 1 + Колонку S
-  if (!forceRun && whaleSheet.getMaxColumns() >= 19 && whaleSheet.getLastRow() >= 281) {
+  // ЖЕЛЕЗНЫЙ ПРЕДОХРАНИТЕЛЬ: если на листе Китов уже создана 19-я колонка S («Что брали в 1С»),
+  // никогда не перезаписываем живой лист старым массивом (независимо от количества строк на листе)!
+  if (whaleSheet.getMaxColumns() >= 19 && whaleSheet.getLastRow() >= 2) {
     const s1 = String(whaleSheet.getRange(1, 19).getValue() || "").trim();
-    const s2 = String(whaleSheet.getRange(2, 19).getValue() || "").trim();
-    const n2 = String(whaleSheet.getRange(2, 14).getValue() || "").trim();
-    if (s1.includes("1С") && s2 !== "" && !n2.includes("Брали по 1С")) {
+    if (s1.includes("1С") && forceRun !== "FORCE_REBUILD_CONFIRMED") {
       return;
     }
   }

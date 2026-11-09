@@ -108,7 +108,7 @@ function getClientsAndActiveSelection_(ss) {
     const lCol = sh.getLastColumn();
     if (lRow < 2 || lCol < 2) return;
 
-    const numCols = Math.min(15, lCol);
+    const numCols = Math.min(19, lCol);
     const data = sh.getRange(2, 1, lRow - 1, numCols).getValues();
     data.forEach((r, idx) => {
       const rowNum  = idx + 2;
@@ -125,13 +125,16 @@ function getClientsAndActiveSelection_(ss) {
       const notes   = String(r[10] || '').trim();
       const history = String(r[13] || '').trim();
       const tactic  = numCols >= 15 ? String(r[14] || '').trim() : '';
+      const s1cInfo = numCols >= 19 ? String(r[18] || '').trim() : '';
 
       const emList = Array.from(new Set(
         rawEm.split(/[,;\s\n]+/).map(x => x.trim()).filter(x => x && x.includes('@'))
       ));
       const lprList = parseLprList_(lprRaw);
 
-      const combinedContext = `${need} ${notes} ${history}`;
+      const combinedContext = `${need} ${notes} ${history} ${s1cInfo}`
+        .replace(/\b\d{1,2}[\.\-\/]\d{1,2}[\.\-\/]\d{2,4}\b/g, ' ')
+        .replace(/\b\d{1,2}:\d{2}\b/g, ' ');
       const pastDiams = Array.from(new Set((combinedContext.match(/\b\d{2,4}\b/g) || []).map(Number)))
         .filter(d => PRICE_STD_DIAMS_.includes(d));
 
@@ -482,6 +485,47 @@ function buildFullPricePdfBlob_(ss, warehouseState) {
 }
 
 /**
+ * Защита от рассинхрона координат строки (если в фоне отсортировали или сдвинули лист при открытом окне КП):
+ * Проверяет совпадение ИНН или Названия компании в client.row, а при смещении — находит актуальную строку клиента.
+ */
+function resolveClientTargetRowSafe_(targetSheet, client) {
+  if (!targetSheet || !client) return -1;
+  const lastRow = targetSheet.getLastRow();
+  if (lastRow < 2) return -1;
+
+  const targetInn = String(client.inn || '').replace(/\D/g, '');
+  const targetComp = String(client.company || '').trim().toLowerCase();
+  const candidateRow = parseInt(client.row, 10) || 0;
+
+  if (candidateRow >= 2 && candidateRow <= lastRow) {
+    const ab = targetSheet.getRange(candidateRow, 1, 1, 2).getValues()[0];
+    const rowInn = String(ab[0] || '').replace(/\D/g, '');
+    const rowComp = String(ab[1] || '').trim().toLowerCase();
+    if ((targetInn && rowInn === targetInn) || (targetComp && targetComp !== 'без названия' && rowComp === targetComp) || (!targetInn && !targetComp)) {
+      return candidateRow;
+    }
+  }
+
+  // Если строка сдвинулась — ищем по ИНН или точному названию компании на листе
+  const allAb = targetSheet.getRange(2, 1, lastRow - 1, 2).getValues();
+  if (targetInn.length >= 10) {
+    for (let i = 0; i < allAb.length; i++) {
+      if (String(allAb[i][0] || '').replace(/\D/g, '') === targetInn) {
+        return i + 2;
+      }
+    }
+  }
+  if (targetComp && targetComp !== 'без названия') {
+    for (let i = 0; i < allAb.length; i++) {
+      if (String(allAb[i][1] || '').trim().toLowerCase() === targetComp) {
+        return i + 2;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
  * Разрешает выбранные имена ЛПР для клиента
  */
 function resolveChosenLprString_(client) {
@@ -521,7 +565,10 @@ function logClientPriceAction(payload) {
       const targetSheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, client.sheet) : ss.getSheetByName(client.sheet);
       if (!targetSheet) return;
 
-      const hijVals = targetSheet.getRange(client.row, 8, 1, 3).getValues()[0];
+      const actualRow = resolveClientTargetRowSafe_(targetSheet, client);
+      if (actualRow < 2) return;
+
+      const hijVals = targetSheet.getRange(actualRow, 8, 1, 3).getValues()[0];
       const curNeed = String(hijVals[0] || '').trim();
       const curType = String(hijVals[1] || '').trim();
       const curApp  = String(hijVals[2] || '').trim();
@@ -536,28 +583,28 @@ function logClientPriceAction(payload) {
 
       const tag = `[${actionLabel}${snap} - ${nowStamp}]`;
 
-      const curHistory = String(targetSheet.getRange(client.row, 14).getValue() || '').trim();
-      targetSheet.getRange(client.row, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
+      const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
+      targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
       const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
         ? getNextWorkingDateObj_(new Date(), 2)
         : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
       const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
-      const curDeadline = targetSheet.getRange(client.row, 12).getValue();
+      const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
       const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
 
       // Ставим свежий контроль +2 раб. дня, если L пустая ИЛИ там дата раньше нового дедлайна
       if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
         if (typeof setDeadlineCellDate_ === 'function') {
-          setDeadlineCellDate_(targetSheet, client.row, nextFollowUp, false);
+          setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
         } else {
-          targetSheet.getRange(client.row, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
+          targetSheet.getRange(actualRow, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
         }
       }
 
       if ((typeof isSheetWithStockMonitor_ === 'function' ? isSheetWithStockMonitor_(client.sheet) : (client.sheet.trim() === "3. Лист ожидания" || client.sheet.trim() === "2. Золотой список (Киты)")) && typeof refreshSingleRowTactic_ === 'function') {
-        refreshSingleRowTactic_(targetSheet, client.row);
+        refreshSingleRowTactic_(targetSheet, actualRow);
       }
 
       loggedCount++;
@@ -1068,9 +1115,10 @@ ${userSignature.html}
         // ФИКСАЦИЯ В ТАБЛИЦЕ (КОЛОНКА N / 14 - ИСТОРИЯ)
         if (!isManual && client.sheet && client.row && client.row >= 2) {
           const targetSheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, client.sheet) : ss.getSheetByName(client.sheet);
-          if (targetSheet) {
+          const actualRow = resolveClientTargetRowSafe_(targetSheet, client);
+          if (targetSheet && actualRow >= 2) {
             const nowStamp = Utilities.formatDate(new Date(), timeZone, "dd.MM.yyyy HH:mm");
-            const hijVals = targetSheet.getRange(client.row, 8, 1, 3).getValues()[0];
+            const hijVals = targetSheet.getRange(actualRow, 8, 1, 3).getValues()[0];
             const curNeed = String(hijVals[0] || '').trim();
             const curType = String(hijVals[1] || '').trim();
             const curApp  = String(hijVals[2] || '').trim();
@@ -1085,27 +1133,27 @@ ${userSignature.html}
 
             const tag = `[${actionType}${snap} - ${nowStamp}]`;
 
-            const curHistory = String(targetSheet.getRange(client.row, 14).getValue() || '').trim();
-            targetSheet.getRange(client.row, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
+            const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
+            targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
             const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
               ? getNextWorkingDateObj_(new Date(), 2)
               : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
             const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
-            const curDeadline = targetSheet.getRange(client.row, 12).getValue();
+            const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
             const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
 
             if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
               if (typeof setDeadlineCellDate_ === 'function') {
-                setDeadlineCellDate_(targetSheet, client.row, nextFollowUp, false);
+                setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
               } else {
-                targetSheet.getRange(client.row, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
+                targetSheet.getRange(actualRow, 12).setNumberFormat("dd.MM.yyyy").setValue(nextFollowUp);
               }
             }
 
             if ((typeof isSheetWithStockMonitor_ === 'function' ? isSheetWithStockMonitor_(client.sheet) : (client.sheet.trim() === "3. Лист ожидания" || client.sheet.trim() === "2. Золотой список (Киты)")) && typeof refreshSingleRowTactic_ === 'function') {
-              refreshSingleRowTactic_(targetSheet, client.row);
+              refreshSingleRowTactic_(targetSheet, actualRow);
             }
           }
         }

@@ -18,11 +18,28 @@ function onOpen() {
     .addToUi();
 
   try {
+    const startMs = Date.now();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
+    const activeSheet = ss.getActiveSheet();
+    const activeRange = activeSheet ? activeSheet.getActiveRange() : null;
+    const activeRow = activeRange ? activeRange.getRow() : 2;
+    const activeCol = activeRange ? activeRange.getColumn() : 1;
 
-    crmSheets.forEach(sName => {
-      const sh = getSheetByNameSafe(ss, sName);
+    const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
+    // Сначала обрабатываем активный лист, чтобы пользователь сразу видел актуальную очередь
+    if (activeSheet) {
+      const actName = activeSheet.getName().trim();
+      const idx = crmSheets.indexOf(actName);
+      if (idx > 0) {
+        crmSheets.splice(idx, 1);
+        crmSheets.unshift(actName);
+      }
+    }
+
+    for (let i = 0; i < crmSheets.length; i++) {
+      // Защита от таймаута 30 сек в простом триггере onOpen
+      if (Date.now() - startMs > 20000) break;
+      const sh = getSheetByNameSafe(ss, crmSheets[i]);
       if (sh) {
         if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
           syncUnpackedNotesOnSheetSilent_(sh);
@@ -33,7 +50,14 @@ function onOpen() {
           highlightDuplicateInnsOnSheet_(sh);
         }
       }
-    });
+    }
+
+    // Возвращаем фокус на ячейку пользователя, если он стоял на активном листе
+    if (activeSheet && activeRow >= 1 && activeCol >= 1) {
+      const safeRow = Math.min(activeRow, Math.max(1, activeSheet.getMaxRows()));
+      const safeCol = Math.min(activeCol, Math.max(1, activeSheet.getMaxColumns()));
+      activeSheet.setActiveSelection(activeSheet.getRange(safeRow, safeCol));
+    }
   } catch (e) {}
 }
 
