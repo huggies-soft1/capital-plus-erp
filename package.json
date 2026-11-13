@@ -1,0 +1,24 @@
+{
+  "name": "capital-plus-erp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Calling.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huggies-soft1/capital-plus-erp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/huggies-soft1/capital-plus-erp/issues"
+  },
+  "homepage": "https://github.com/huggies-soft1/capital-plus-erp#readme",
+  "devDependencies": {
+    "@types/google-apps-script": "^2.0.15"
+  }
+}
