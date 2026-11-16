@@ -381,9 +381,10 @@ function handleCallingSheetEdit(e, sheet) {
   }
 
   // === ВЕТКА 2: ВОЗВРАТ ИЗ АРХИВА В РАБОТУ ===
-  if (sheetName === "4.Архив лидов" && (decision.includes("обзвон") || decision.includes("ожидан") || decision.includes("вернуть"))) {
+  if (sheetName === "4.Архив лидов" && (decision.includes("обзвон") || decision.includes("ожидан") || decision.includes("кит") || decision.includes("вернуть"))) {
+    const toWhales = decision.includes("кит");
     const toWaiting = decision.includes("ожидан");
-    const targetName = toWaiting ? "3. Лист ожидания" : "1. Обзвон (База)";
+    const targetName = toWhales ? "2. Золотой список (Киты)" : (toWaiting ? "3. Лист ожидания" : "1. Обзвон (База)");
     const targetSheet = getSheetByNameSafe(ss, targetName);
     if (!targetSheet) return ss.toast(`Ошибка: лист «${targetName}» не найден`, "Ошибка");
 
@@ -869,6 +870,16 @@ const WHALES_DECISIONS_LIST_ = [
   "Не целевой"
 ];
 
+const ARCHIVE_DECISIONS_LIST_ = [
+  "Отказ (Закрылись)",
+  "Не целевой",
+  "Недозвон 4/4",
+  "Токсичный демпинг",
+  "Вернуть в Обзвон",
+  "Вернуть в Ожидание",
+  "Вернуть в Киты"
+];
+
 
 
 /**
@@ -914,7 +925,7 @@ function updateListValidationPreservingStyle_(range, baseItems, preserveCustomCl
 function setupCleanDropdownsOnSheetSilent_(sheet) {
   if (!sheet) return;
   const sheetName = sheet.getName().trim();
-  const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания"];
+  const crmSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания", "4.Архив лидов"];
   if (!crmSheets.includes(sheetName)) return;
 
   const maxRows = Math.max(sheet.getLastRow(), 50);
@@ -931,6 +942,8 @@ function setupCleanDropdownsOnSheetSilent_(sheet) {
   } else if (sheetName === "2. Золотой список (Киты)") {
     updateListValidationPreservingStyle_(sheet.getRange(2, 13, numRows, 1), WHALES_DECISIONS_LIST_, false);
     ensureWhaleColumnsAndSegments_(sheet);
+  } else if (sheetName === "4.Архив лидов") {
+    updateListValidationPreservingStyle_(sheet.getRange(2, 13, numRows, 1), ARCHIVE_DECISIONS_LIST_, false);
   }
 }
 
@@ -1722,8 +1735,8 @@ function insertOrMergeRowByInn_(targetSheet, rowValues, incomingDossierNote) {
       rowValues[8] || oldRow[8],
       rowValues[9] || oldRow[9],
       mergeUniqueLines_(oldRow[10], rowValues[10], ' | '),
-      shiftWeekendToMonday_(rowValues[11] || oldRow[11]),
-      "",
+      targetSheet.getName().trim() === "4.Архив лидов" ? "" : shiftWeekendToMonday_(rowValues[11] || oldRow[11]),
+      targetSheet.getName().trim() === "4.Архив лидов" ? (rowValues[12] || oldRow[12] || "Отказ (Закрылись)") : "",
       prependHistoryLog_(oldRow[13], rowValues[13])
     ];
 
