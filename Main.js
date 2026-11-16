@@ -9,6 +9,7 @@ function onOpen() {
     .createMenu('📱 Управление')
     .addItem('⚡ Открыть калькулятор отгрузки', 'openCalculatorSidebar')
     .addItem('📄 Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
+    .addItem('🤝 Напоминалка и Карта партнёра (HTML / Мессенджер)', 'openFollowUpModal')
     .addSeparator()
     .addItem('🎯 Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
     .addItem('🔍 Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
@@ -23,7 +24,7 @@ function onOpen() {
     const activeSheet = ss.getActiveSheet();
     const activeRange = activeSheet ? activeSheet.getActiveRange() : null;
     const activeRow = activeRange ? activeRange.getRow() : 2;
-    const activeCol = activeRange ? activeRange.getColumn() : 1;
+    const activeCol = activeRange ? activeSheet.getActiveRange().getColumn() : 1;
 
     const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
     // Сначала обрабатываем активный лист, чтобы пользователь сразу видел актуальную очередь
@@ -88,7 +89,7 @@ function cleanCompanyName(name) {
     }
   }
 
-  str = str.replace(/^(ООО|ЗАО|ОАО|ПАО|АО|ИП)"/i, '$1 "');
+  str = str.replace(/^(ООО|ЗАО|ОАО|ПАО|АО|ИП)"/i, '\$1 "');
 
   const quotes = (str.match(/"/g) || []).length;
   if (quotes % 2 !== 0 && !str.endsWith('"')) {
@@ -119,7 +120,7 @@ function getSheetByNameSafe(ss, targetName) {
 }
 
 // =================================================================
-// ЕДИНЫЙ ТРИГГЕР ИЗМЕНЕНИЙ (МАРШРУТИЗАТОР СОБЫТИЙ)
+// ЕДИНЫЙ ТРИГГЕР ИЗМЕНЕНИЙ (МАРШРУТИТИЗАТОР СОБЫТИЙ)
 // =================================================================
 
 function onEdit(e) {

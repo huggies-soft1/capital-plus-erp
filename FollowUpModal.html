@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Аналитика отношений и Напоминалка • КАПИТАЛ-ПЛЮС</title>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-blue: #2563eb;
+      --brand-blue-hover: #1d4ed8;
+      --brand-dark: #1e293b;
+      --brand-darker: #0f172a;
+      --text-main: #334155;
+      --text-muted: #64748b;
+      --border-light: #e2e8f0;
+      --border-soft: #f1f5f9;
+      --bg-app: #f8fafc;
+      --bg-white: #ffffff;
+      --bg-row-hover: #f8fafc;
+      --bg-row-selected: #eff6ff;
+      --success: #16a34a;
+      --radius-lg: 12px;
+      --radius-md: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px 24px 36px 24px;
+      font-size: 13.5px;
+      line-height: 1.5;
+      background-color: var(--bg-app);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body.is-minimized {
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      background-color: #ffffff !important;
+      height: 100vh !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    #minimizedRestoreBar {
+      display: none;
+      width: 100%;
+      height: 100%;
+      padding: 4px 6px;
+      align-items: center;
+      justify-content: center;
+    }
+    body.is-minimized #minimizedRestoreBar { display: flex !important; }
+    .btn-restore-full {
+      width: 100%;
+      height: 40px;
+      background: #0f172a;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .toast-banner {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 460px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.18);
+      z-index: 99999;
+      border-left: 4px solid #2563eb;
+    }
+    .toast-banner.toast-success { border-left-color: #16a34a; }
+    .toast-banner.toast-warn { border-left-color: #d97706; }
+    .toast-banner.toast-error { border-left-color: #dc2626; }
+
+    .document-wrapper {
+      background: var(--bg-white);
+      max-width: 100%;
+      margin: 0 auto;
+      padding: 28px 36px;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+    }
+
+    .top-warehouse-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+      padding-bottom: 20px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .brand-left { display: flex; flex-direction: column; gap: 4px; }
+    .doc-title { color: var(--brand-blue); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .company-brand { color: var(--brand-darker); font-size: 28px; font-weight: 900; letter-spacing: -0.8px; line-height: 1.1; }
+    .info-badge { display: inline-flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; font-weight: 500; flex-wrap: wrap; }
+    .header-right-wrap { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .contact-card { text-align: right; line-height: 1.35; }
+    .contact-label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.6px; }
+    .contact-name { font-size: 14px; color: var(--brand-dark); font-weight: 600; }
+    .contact-phone { font-size: 18px; color: var(--brand-blue); font-weight: 900; }
+
+    .partner-card-preview-box {
+      margin: 0 0 20px 0;
+      padding: 18px 20px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-left: 4px solid #0284c7;
+      border-radius: 10px;
+    }
+    .partner-card-top-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .partner-card-heading { font-size: 12.5px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
+    .partner-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+    .partner-metric-cell { background: #ffffff; border: 1px solid #e0f2fe; border-radius: 8px; padding: 10px 12px; }
+    .partner-metric-label { font-size: 10.5px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px; }
+    .partner-metric-input { width: 100%; border: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 15.5px; font-weight: 800; color: #0f172a; padding: 0; }
+    .partner-metric-sub { width: 100%; border: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 11.5px; font-weight: 500; color: #475569; margin-top: 2px; padding: 0; }
+    .partner-details-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 10px; border-top: 1px solid #bae6fd; }
+    .partner-detail-field { display: flex; flex-direction: column; gap: 3px; }
+    .partner-detail-input { width: 100%; padding: 7px 10px; border: 1px solid #bae6fd; border-radius: 6px; background: #ffffff; font-family: 'Inter', sans-serif; font-size: 12.5px; font-weight: 600; color: #0f172a; }
+
+    .scenario-pills-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    .scen-pill { padding: 7px 13px; border-radius: 8px; border: 1px solid #cbd5e1; background: #ffffff; color: #334155; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+    .scen-pill.active { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+
+    .composer-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .email-textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 13px; font-family: 'Inter', sans-serif; height: 82px; resize: vertical; background: #f8fafc; line-height: 1.45; }
+    .email-textarea:focus { background: #ffffff; border-color: var(--brand-blue); outline: none; }
+
+    .main-action-buttons-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--border-light); }
+
+    .btn { padding: 9px 16px; border-radius: var(--radius-md); font-weight: 600; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; font-family: 'Inter', sans-serif; white-space: nowrap; border: 1px solid transparent; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+    .btn-primary-send { background: #2563eb; color: #ffffff; font-weight: 700; padding: 10px 20px; }
+    .btn-whatsapp { background: #16a34a; color: #ffffff; font-weight: 700; }
+    .btn-draft { background: transparent; color: #475569; border-color: #e2e8f0; }
+    .btn-test-self { background: #fef3c7; color: #92400e; border-color: #f59e0b; font-weight: 700; }
+    .btn-minimize { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+
+    .client-search-box-wrap { display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; margin-bottom: 12px; }
+    .client-search-field-container { flex: 1; min-width: 300px; position: relative; display: flex; align-items: center; }
+    .client-search-input-big { width: 100%; height: 42px; padding: 8px 38px 8px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-md); font-size: 13.5px; font-family: 'Inter', sans-serif; background: #f8fafc; }
+    .client-filter-tabs-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .sheet-tabs-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .sheet-tab-btn { padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: #64748b; }
+    .sheet-tab-btn.active { background: #eff6ff; color: #2563eb; font-weight: 700; }
+
+    .selected-recipients-box { padding: 4px 0 12px 0; }
+    .selected-recipient-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px dashed var(--border-light); }
+    .sel-comp-name { font-weight: 700; font-size: 13px; color: #0f172a; }
+    .sel-controls-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+    .mini-pills-wrap { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    .mini-label { font-size: 11px; font-weight: 600; color: #64748b; }
+    .person-pill { padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; cursor: pointer; border: 1px solid #e2e8f0; background: #ffffff; color: #475569; }
+    .person-pill.active { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; font-weight: 700; }
+    .email-pill { padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 500; cursor: pointer; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; }
+    .email-pill.off { color: #94a3b8; text-decoration: line-through; background: transparent; border-color: transparent; }
+    .btn-remove-rec { background: transparent; color: #94a3b8; border: none; cursor: pointer; font-weight: 700; }
+
+    table.relations-table { width: 100%; border-collapse: collapse; background: #ffffff; }
+    table.relations-table thead th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      padding: 11px 10px;
+      text-align: left;
+      border-top: 1px solid #e2e8f0;
+      border-bottom: 1px solid #cbd5e1;
+      z-index: 10;
+    }
+    table.relations-table tbody tr { border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+    table.relations-table tbody tr:hover td { background: #f8fafc; }
+    table.relations-table tbody tr.is-checked td { background: #eff6ff !important; }
+    table.relations-table td { padding: 11px 10px; font-size: 12.5px; vertical-align: middle; }
+    .custom-chk { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <div id="toastBanner" class="toast-banner"></div>
+
+  <div id="minimizedRestoreBar">
+    <button type="button" class="btn-restore-full" onclick="toggleMinimizeWindow()">
+      Развернуть Аналитику отношений и Напоминалку
+    </button>
+  </div>
+
+  <div id="gasServerState"
+       data-clients="<?= typeof clientsJson !== 'undefined' ? clientsJson : '' ?>"
+       data-summary="<?= typeof summaryJson !== 'undefined' ? summaryJson : '' ?>"
+       data-prefill="<?= typeof prefillClientKey !== 'undefined' ? prefillClientKey : '' ?>"
+       data-date="<?= typeof generatedDate !== 'undefined' ? generatedDate : '' ?>"
+       style="display:none;"></div>
+
+  <div class="document-wrapper">
+
+    <div class="top-warehouse-header">
+      <div class="brand-left">
+        <div class="doc-title">АНАЛИТИКА ОТНОШЕНИЙ, ИСТОРИЯ ТОРГА 1С И РАССЫЛКА НАПОМИНАЛОК</div>
+        <div class="company-brand">КАПИТАЛ-ПЛЮС • ПУЛЬТ ПАРТНЁРСТВА</div>
+        <div class="info-badge">
+          <span>Дата: <strong id="headerDateText" style="color:#0f172a;"><?= generatedDate ?></strong></span>
+          <span style="color:#cbd5e1;">|</span>
+          <span>Китов 1С: <strong id="hdrWhalesCnt" style="color:#0f172a;">—</strong></span>
+          <span style="color:#cbd5e1;">|</span>
+          <span>Сторговали по 1С: <strong id="hdrTotal1C" style="color:#16a34a;">—</strong></span>
+          <span style="color:#cbd5e1;">|</span>
+          <span>Пора напомнить: <strong id="hdrRemindCnt" style="color:#d97706;">—</strong></span>
+        </div>
+      </div>
+
+      <div class="header-right-wrap">
+        <div class="contact-card">
+          <div class="contact-label">ОТДЕЛ ПРОДАЖ</div>
+          <div class="contact-name">Кирилл</div>
+          <div class="contact-phone">8 (906) 588-37-77</div>
+        </div>
+        <button type="button" class="btn btn-minimize" onclick="toggleMinimizeWindow()">Свернуть окно</button>
+      </div>
+    </div>
+
+    <div class="partner-card-preview-box">
+      <div class="partner-card-top-bar">
+        <div class="partner-card-heading">
+          📊 КАРТА ПАРТНЁРСТВА И ИСТОРИЯ СОТРУДНИЧЕСТВА <span id="previewClientTitle" style="color:#0f172a; font-weight:900;">(Выберите клиента)</span>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#0369a1; cursor:pointer;">
+            <input type="checkbox" id="chkIncludeRubles" checked style="width:15px; height:15px; accent-color:#0284c7;">
+            Показывать сумму сделок в ₽ и средний чек клиенту
+          </label>
+          <button type="button" class="btn btn-sm btn-test-self" onclick="activateTestCompanySelf()">
+            🧪 Тестовая фирма (на себя)
+          </button>
+          <button type="button" class="btn btn-sm btn-draft" onclick="routeSelectedToMyEmail()">
+            🎯 Подставить мою почту
+          </button>
+        </div>
+      </div>
+
+      <div class="partner-metrics-grid">
+        <div class="partner-metric-cell">
+          <div class="partner-metric-label">Сколько сторговали (1С)</div>
+          <input type="text" id="statTons" class="partner-metric-input" value="48,5 тн">
+          <input type="text" id="statUpdCount" class="partner-metric-sub" value="6 партий (УПД)">
+        </div>
+
+        <div class="partner-metric-cell">
+          <div class="partner-metric-label">Объём сделок (с НДС)</div>
+          <input type="text" id="statRevenue" class="partner-metric-input" value="3 420 000 ₽">
+          <input type="text" id="statAvgPrice" class="partner-metric-sub" value="Ср. цена: 70 515 ₽/тн">
+        </div>
+
+        <div class="partner-metric-cell">
+          <div class="partner-metric-label">Крайняя отгрузка / Период</div>
+          <input type="text" id="statLastOrder" class="partner-metric-input" value="18.08.2025">
+          <input type="text" id="statYears" class="partner-metric-sub" value="Период: 2024–2025 гг.">
+        </div>
+
+        <div class="partner-metric-cell">
+          <div class="partner-metric-label">Статус отношений и КП</div>
+          <input type="text" id="statPartnerStatus" class="partner-metric-input" value="Приоритетный партнёр">
+          <input type="text" id="statLastKp" class="partner-metric-sub" value="Крайнее КП: 01.11.2026">
+        </div>
+      </div>
+
+      <div class="partner-details-row">
+        <div class="partner-detail-field">
+          <span style="font-size:11px; font-weight:700; color:#0369a1;">Что клиент брал у нас по 1С (колонка S — уходит в карточку клиенту):</span>
+          <input type="text" id="statPipesPurchased" class="partner-detail-input" value="530х8 (22.4 т), 426х9 (16.1 т), 219х6 (10.0 т)">
+        </div>
+        <div class="partner-detail-field">
+          <span style="font-size:11px; font-weight:700; color:#0369a1;">Что обсуждали в крайнем КП / Текущая потребность (N и H):</span>
+          <input type="text" id="statQuotedAndNeed" class="partner-detail-input" value="530х8 Восст. — 60 000 ₽/т, 426х9 Нов. — 74 000 ₽/т">
+        </div>
+      </div>
+    </div>
+
+    <div class="scenario-pills-row">
+      <span style="font-size:12px; font-weight:800; color:#0f172a; text-transform:uppercase;">Сценарий письма/мессенджера:</span>
+      <button type="button" class="scen-pill active" id="scen_remind_kp" onclick="setScenario('remind_kp')">
+        🔔 1. Дожим по отправленному КП (узнать решение / проходную цену)
+      </button>
+      <button type="button" class="scen-pill" id="scen_partner_1c" onclick="setScenario('partner_1c')">
+        🤝 2. Напомнить о себе Киту 1С (итоги работы + планы на сезон)
+      </button>
+      <button type="button" class="scen-pill" id="scen_bargain_price" onclick="setScenario('bargain_price')">
+        ⚖️ 3. Предложить торг / спец-скидку от объёма
+      </button>
+    </div>
+
+    <div class="composer-grid">
+      <div>
+        <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; margin-bottom:4px;">
+          Текст обращения к клиенту (авто-подстановка или свой текст):
+        </div>
+        <textarea id="inputCustomMessage" class="email-textarea"></textarea>
+      </div>
+      <div>
+        <div style="font-size:11px; font-weight:700; color:#b45309; text-transform:uppercase; margin-bottom:4px;">
+          🎯 Персональное условие торга / Ценовое предложение (выделится желтой плашкой):
+        </div>
+        <textarea id="inputCustomOffer" class="email-textarea" placeholder="Например: Готовы согласовать спец-цену 58 500 ₽/тн с НДС на 530х8 при бронировании объёма на этой неделе."></textarea>
+      </div>
+    </div>
+
+    <div class="selected-recipients-box" id="selectedRecipientsBox" style="display:none;">
+      <div id="recipientChipsWrap"></div>
+    </div>
+
+    <div class="main-action-buttons-row">
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary-send" id="btnSendProposal" onclick="executeSendFollowUp(false)">
+          📧 Отправить Напоминалку на Email
+        </button>
+        <button type="button" class="btn btn-draft" id="btnDraftProposal" onclick="executeSendFollowUp(true)">
+          📝 В черновики Gmail
+        </button>
+        <span style="font-size:12px; color:#475569; font-weight:600; margin-left:6px;">След. контроль (L):</span>
+        <select id="selectNextDays" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-weight:700; font-size:12.5px;">
+          <option value="2">+2 раб. дня</option>
+          <option value="3" selected>+3 раб. дня</option>
+          <option value="5">+5 раб. дней</option>
+          <option value="7">+7 раб. дней</option>
+          <option value="14">+14 раб. дней</option>
+        </select>
+      </div>
+
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn btn-whatsapp" id="btnCopyText" onclick="copyFollowUpForMessenger()">
+          <span id="btnCopyLabel">💬 Скопировать Напоминалку со статистикой в Мессенджер</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="client-search-box-wrap">
+      <div class="client-search-field-container">
+        <input type="text" id="smartInput" class="client-search-input-big"
+               placeholder="Поиск по клиентам: компания, имя ЛПР, ИНН, какие трубы брали (530, 426) или введите Email..."
+               oninput="renderClientsTable()"
+               onkeydown="onSmartKeyDown(event)"
+               autocomplete="off">
+      </div>
+      <button type="button" class="btn btn-draft" onclick="addManualEmailFromInput()">+ Добавить Email</button>
+      <button type="button" class="btn btn-draft" onclick="syncClientFromActiveSheetRow(true)">🔄 Обновить из таблицы</button>
+    </div>
+
+    <div class="client-filter-tabs-row">
+      <div class="sheet-tabs-group">
+        <button type="button" class="sheet-tab-btn active" data-tab="ALL" onclick="setRelationTab('ALL', this)">
+          Все клиенты <span id="cntAll"></span>
+        </button>
+        <button type="button" class="sheet-tab-btn" data-tab="REMIND" onclick="setRelationTab('REMIND', this)">
+          🔥 Пора напомнить / Дожим КП <span id="cntRemind"></span>
+        </button>
+        <button type="button" class="sheet-tab-btn" data-tab="2. Золотой список (Киты)" onclick="setRelationTab('2. Золотой список (Киты)', this)">
+          🏆 Киты 1С <span id="cntWhale"></span>
+        </button>
+        <button type="button" class="sheet-tab-btn" data-tab="3. Лист ожидания" onclick="setRelationTab('3. Лист ожидания', this)">
+          ⏳ Лист ожидания <span id="cntWait"></span>
+        </button>
+        <button type="button" class="sheet-tab-btn" data-tab="1. Обзвон (База)" onclick="setRelationTab('1. Обзвон (База)', this)">
+          📞 Обзвон <span id="cntCold"></span>
+        </button>
+
+        <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#475569; margin-left:8px; cursor:pointer;">
+          <input type="checkbox" id="chkOnlyWithEmail" onchange="renderClientsTable()" style="width:15px; height:15px; accent-color:#2563eb;">
+          Только с Email
+        </label>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <button type="button" class="btn btn-sm btn-draft" onclick="selectAllVisibleWithEmail()">Выбрать всех в списке (с Email)</button>
+        <button type="button" class="btn btn-sm btn-draft" onclick="clearAllRecipients()">Сбросить выбор</button>
+      </div>
+    </div>
+
+    <div style="max-height: 420px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px;">
+      <table class="relations-table">
+        <thead>
+          <tr>
+            <th style="width: 36px; text-align: center;">✓</th>
+            <th style="width: 22%;">Компания / Лист / Город</th>
+            <th style="width: 18%;">ЛПР (клик = кому пишем)</th>
+            <th style="width: 16%;">Сколько сторговали в 1С</th>
+            <th style="width: 22%;">Что брали (S) / Потребность (H)</th>
+            <th style="width: 22%;">Анализ отношений и КП (N)</th>
+          </tr>
+        </thead>
+        <tbody id="relationsTableBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    var DEMO_TEST_CLIENT = {
+      key: "__TEST_COMPANY__",
+      sheet: "2. Золотой список (Киты)",
+      row: 0,
+      isTestSelf: true,
+      inn: "3663070544",
+      company: "🧪 ООО «ТехноСтрой-Тест» (Тест на себя)",
+      city: "г. Воронеж",
+      lpr: "Кирилл Борисович",
+      lprList: ["Кирилл Борисович"],
+      phone: "+7 (906) 588-37-77",
+      emailStr: "mail@kapital-p.ru",
+      emailList: ["mail@kapital-p.ru"],
+      sphere: "Строительство трубопроводов",
+      need: "530х8, 426х9, 219х6",
+      relationStatus: "🟠 Пора напомнить (15 дн. после КП)",
+      needsReminder: true,
+      stats1C: {
+        has1C: true,
+        partnerStatus: "Приоритетный партнёр",
+        tons: 48.5,
+        tonsFormatted: "48,5 тн",
+        revenue: 3420000,
+        revenueFormatted: "3 420 000 ₽",
+        avgPrice: 70515,
+        avgPriceFormatted: "70 515 ₽/тн",
+        updCount: 6,
+        years: "2024–2025 гг.",
+        lastOrderDate: "18.08.2025",
+        pipesPurchased: "530х8 (22.4 т), 426х9 (16.1 т), 219х6 (10.0 т)"
+      },
+      statsKp: {
+        kpCount: 2,
+        totalTouches: 4,
+        lastKpDate: "01.11.2026",
+        daysSinceKp: 15,
+        quotedSummary: "530х8 Восст. — 60 000 ₽/т, 426х9 Нов. — 74 000 ₽/т"
+      }
+    };
+
+    var rawClientsFromSheet = [];
+    var recipientStore = {};
+    var currentTab = "ALL";
+    var currentScenario = "remind_kp";
+    var toastTimer = null;
+
+    function showToast(msg, type) {
+      var el = document.getElementById("toastBanner");
+      if (!el) return;
+      el.className = "toast-banner " + (type ? "toast-" + type : "");
+      el.innerText = msg;
+      el.style.display = "block";
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(function() { el.style.display = "none"; }, 4000);
+    }
+
+    function toggleMinimizeWindow() {
+      var isMin = document.body.classList.toggle("is-minimized");
+      if (typeof google !== "undefined" && google.script && google.script.host) {
+        if (isMin) {
+          google.script.host.setWidth(330);
+          google.script.host.setHeight(56);
+        } else {
+          google.script.host.setWidth(1180);
+          google.script.host.setHeight(860);
+        }
+      }
+    }
+
+    function copyToClipboardSafe(text, onSuccess) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(function() { fallbackCopyText(text, onSuccess); });
+      } else {
+        fallbackCopyText(text, onSuccess);
+      }
+    }
+
+    function fallbackCopyText(text, onSuccess) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta);
+      if (onSuccess) onSuccess();
+    }
+
+    function normalizeClientRecord_(c) {
+      var lprArr = (c.lprList && c.lprList.length > 0)
+        ? c.lprList
+        : (c.lpr ? String(c.lpr).split(/[\n\/;,]+/).map(function(s) { return s.replace(/\(.*?\)/g, '').trim(); }).filter(Boolean) : []);
+      var emArr = (c.emailList && c.emailList.length > 0)
+        ? c.emailList
+        : (c.emailStr ? String(c.emailStr).split(/[,;\s\n]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.indexOf('@') > -1; }) : []);
+      c.lprList = lprArr;
+      c.emailList = emArr;
+      c.emailStr = emArr.join(', ');
+      return c;
+    }
+
+    function initDataOnLoad() {
+      var stateEl = document.getElementById("gasServerState");
+      var rawClientsAttr = stateEl ? (stateEl.getAttribute("data-clients") || "").trim() : "";
+      var rawSummaryAttr = stateEl ? (stateEl.getAttribute("data-summary") || "").trim() : "";
+      var rawPrefill = stateEl ? (stateEl.getAttribute("data-prefill") || "").trim() : "";
+      var rawDate = stateEl ? (stateEl.getAttribute("data-date") || "").trim() : "";
+
+      if (rawDate && rawDate.indexOf("<" + "?=") === -1) {
+        document.getElementById("headerDateText").innerText = rawDate;
+      }
+
+      if (rawSummaryAttr && rawSummaryAttr.indexOf("<" + "?=") === -1) {
+        try {
+          var sum = JSON.parse(rawSummaryAttr);
+          document.getElementById("hdrWhalesCnt").innerText = (sum.whalesCount || 0) + " комп.";
+          document.getElementById("hdrTotal1C").innerText = (sum.total1CTons || 0) + " тн / " + (sum.total1CRevenueMln || 0) + " млн ₽";
+          document.getElementById("hdrRemindCnt").innerText = (sum.needReminderCount || 0) + " комп.";
+        } catch (e) {}
+      }
+
+      var loadedFromGas = false;
+      if (rawClientsAttr && rawClientsAttr.indexOf("<" + "?=") === -1) {
+        try {
+          var parsed = JSON.parse(rawClientsAttr);
+          rawClientsFromSheet = (typeof parsed === "string") ? JSON.parse(parsed) : parsed;
+          if (Array.isArray(rawClientsFromSheet) && rawClientsFromSheet.length > 0) loadedFromGas = true;
+        } catch (e) { rawClientsFromSheet = []; }
+      }
+
+      if (!loadedFromGas) {
+        rawClientsFromSheet = [DEMO_TEST_CLIENT];
+      } else {
+        rawClientsFromSheet.unshift(DEMO_TEST_CLIENT);
+      }
+      rawClientsFromSheet = rawClientsFromSheet.map(normalizeClientRecord_);
+
+      if (rawPrefill && rawPrefill.indexOf("<" + "?=") === -1) {
+        var found = rawClientsFromSheet.find(function(c) { return c.key === rawPrefill; });
+        if (found) toggleCompanySelection(found.key, true);
+      } else {
+        toggleCompanySelection("__TEST_COMPANY__", true);
+      }
+
+      updateTabCounts();
+      renderClientsTable();
+      renderRecipientChips();
+    }
+
+    window.onload = initDataOnLoad;
+
+    function setScenario(scenKey) {
+      currentScenario = scenKey;
+      ["remind_kp", "partner_1c", "bargain_price"].forEach(function(k) {
+        var btn = document.getElementById("scen_" + k);
+        if (btn) btn.className = "scen-pill" + (k === scenKey ? " active" : "");
+      });
+      regenerateMessageFromPrimaryClient();
+    }
+
+    function regenerateMessageFromPrimaryClient() {
+      var keys = Object.keys(recipientStore);
+      var primary = keys.length > 0 ? recipientStore[keys[0]].clientObj : DEMO_TEST_CLIENT;
+      var comp = (primary.company || "").replace(/^🧪\s*/, "").replace(/\s*\(Тест на себя\)$/, "");
+      var s1c = primary.stats1C || {};
+      var sKp = primary.statsKp || {};
+      var kpDate = sKp.lastKpDate ? (" от " + sKp.lastKpDate) : "";
+      var quoted = sKp.quotedSummary ? (" (" + sKp.quotedSummary + ")") : "";
+
+      var text = "";
+      if (currentScenario === "partner_1c") {
+        text = "Благодарим " + (comp || "Вашу компанию") + " за плодотворное сотрудничество с ООО «Капитал-Плюс»! Ниже в карточке партнёра мы собрали краткую сводку наших совместных поставок стальной трубы.\n\n" +
+               "Сейчас формируем график отгрузок и резервов на складе в г. Воронеже. Подскажите, планируются ли у Вас в ближайшее время новые объекты или потребность по профильным диаметрам? Для постоянных партнёров готовы заранее придержать нужный объём и дать приоритетную цену.";
+      } else if (currentScenario === "bargain_price") {
+        text = "В продолжение наших переговоров с " + (comp || "Вашей компанией") + " направляем сводку по нашему взаимодействию и предлагаем обсудить индивидуальные условия поставки трубного проката.\n\n" +
+               "Если у Вас есть целевая (проходная) цена по текущей спецификации или встречное предложение — напишите нам, мы оперативно согласуем дополнительную скидку от объёма и зафиксируем металл в резерве.";
+      } else {
+        text = "Ранее мы направляли для " + (comp || "Вашей компанией") + " коммерческое предложение" + kpDate + quoted + " со склада в г. Воронеже.\n\n" +
+               "Подскажите, пожалуйста, удалось ли рассмотреть наше предложение и сохраняется ли актуальность закупки под текущие задачи? Если нужно скорректировать объём, стенку или обсудить цену для прохождения в смету — будем рады оперативно дать обратную связь.";
+      }
+      document.getElementById("inputCustomMessage").value = text;
+    }
+
+    function activateTestCompanySelf() {
+      recipientStore = {};
+      toggleCompanySelection("__TEST_COMPANY__", true);
+      showToast("🧪 Выбрана тестовая карточка «ООО ТехноСтрой-Тест» с отправкой на ваш Email mail@kapital-p.ru!", "warn");
+    }
+
+    function routeSelectedToMyEmail() {
+      var keys = Object.keys(recipientStore);
+      if (keys.length === 0) {
+        activateTestCompanySelf();
+        return;
+      }
+      keys.forEach(function(k) {
+        var r = recipientStore[k];
+        if (r.emailOptions.indexOf("mail@kapital-p.ru") === -1) r.emailOptions.unshift("mail@kapital-p.ru");
+        r.selectedEmails = ["mail@kapital-p.ru"];
+        if (r.clientObj) r.clientObj.isTestSelf = true;
+        syncClientObjFields_(r);
+      });
+      renderRecipientChips();
+      showToast("🎯 Для выбранного клиента подставлен ваш Email mail@kapital-p.ru!", "warn");
+    }
+
+    function updatePartnerCardPreviewFromPrimaryClient() {
+      var keys = Object.keys(recipientStore);
+      if (keys.length === 0) {
+        document.getElementById("previewClientTitle").innerText = "(Клиент не выбран)";
+        return;
+      }
+      var primary = recipientStore[keys[0]].clientObj || DEMO_TEST_CLIENT;
+      var s1c = primary.stats1C || {};
+      var sKp = primary.statsKp || {};
+
+      document.getElementById("previewClientTitle").innerText = "— " + (primary.company || "Партнёр") + (keys.length > 1 ? " и ещё " + (keys.length - 1) + " комп." : "");
+      document.getElementById("statTons").value = s1c.tonsFormatted || (s1c.has1C ? (s1c.tons + " тн") : "КП в работе");
+      document.getElementById("statUpdCount").value = s1c.updCount ? (s1c.updCount + " партий (УПД)") : (s1c.has1C ? "По данным 1С" : "Согласование КП");
+      document.getElementById("statRevenue").value = s1c.revenueFormatted || "По запросу";
+      document.getElementById("statAvgPrice").value = s1c.avgPriceFormatted ? ("Ср. цена: " + s1c.avgPriceFormatted) : "С НДС 22%";
+      document.getElementById("statLastOrder").value = s1c.lastOrderDate || (sKp.lastKpDate || "В работе");
+      document.getElementById("statYears").value = s1c.years ? ("Период: " + s1c.years) : "Прямые поставки";
+      document.getElementById("statPartnerStatus").value = s1c.partnerStatus || "Действующий контрагент";
+      document.getElementById("statLastKp").value = sKp.lastKpDate ? ("Крайнее КП: " + sKp.lastKpDate) : "Персональное КП";
+      document.getElementById("statPipesPurchased").value = s1c.pipesPurchased || "Поставки трубного металлопроката";
+      document.getElementById("statQuotedAndNeed").value = [sKp.quotedSummary, primary.need ? ("Текущая заявка: " + primary.need) : ""].filter(Boolean).join(" | ") || "Сверка потребности на ближайшие объекты";
+
+      regenerateMessageFromPrimaryClient();
+    }
+
+    function getCustomStatsOverrideFromInputs() {
+      var tonsVal = document.getElementById("statTons").value.trim();
+      var updVal = document.getElementById("statUpdCount").value.trim();
+      var revVal = document.getElementById("statRevenue").value.trim();
+      var avgVal = document.getElementById("statAvgPrice").value.trim().replace(/^Ср\.\s*цена:\s*/i, "");
+      var lastOrdVal = document.getElementById("statLastOrder").value.trim();
+      var yearsVal = document.getElementById("statYears").value.trim().replace(/^Период:\s*/i, "");
+      var statusVal = document.getElementById("statPartnerStatus").value.trim();
+      var lastKpVal = document.getElementById("statLastKp").value.trim().replace(/^Крайнее\s*КП:\s*/i, "");
+      var pipesVal = document.getElementById("statPipesPurchased").value.trim();
+      var quotedVal = document.getElementById("statQuotedAndNeed").value.trim();
+
+      var updNumMatch = updVal.match(/\d+/);
+      var has1C = (tonsVal && tonsVal !== "КП в работе" && tonsVal !== "0 тн") || (revVal && revVal !== "По запросу");
+
+      return {
+        stats1C: {
+          has1C: has1C,
+          partnerStatus: statusVal,
+          tonsFormatted: tonsVal,
+          updCount: updNumMatch ? parseInt(updNumMatch[0], 10) : 0,
+          revenueFormatted: revVal !== "По запросу" ? revVal : "",
+          avgPriceFormatted: avgVal !== "С НДС 22%" ? avgVal : "",
+          lastOrderDate: lastOrdVal,
+          years: yearsVal,
+          pipesPurchased: pipesVal
+        },
+        statsKp: {
+          lastKpDate: lastKpVal !== "Персональное КП" ? lastKpVal : "",
+          quotedSummary: quotedVal
+        },
+        need: ""
+      };
+    }
+
+    function updateTabCounts() {
+      document.getElementById("cntAll").innerText = "(" + rawClientsFromSheet.length + ")";
+      document.getElementById("cntRemind").innerText = "(" + rawClientsFromSheet.filter(function(c) { return c.needsReminder; }).length + ")";
+      document.getElementById("cntWhale").innerText = "(" + rawClientsFromSheet.filter(function(c) { return c.sheet === "2. Золотой список (Киты)"; }).length + ")";
+      document.getElementById("cntWait").innerText = "(" + rawClientsFromSheet.filter(function(c) { return c.sheet === "3. Лист ожидания"; }).length + ")";
+      document.getElementById("cntCold").innerText = "(" + rawClientsFromSheet.filter(function(c) { return c.sheet === "1. Обзвон (База)"; }).length + ")";
+    }
+
+    function setRelationTab(tabName, btnEl) {
+      currentTab = tabName;
+      document.querySelectorAll(".sheet-tab-btn").forEach(function(b) { b.classList.remove("active"); });
+      if (btnEl) btnEl.classList.add("active");
+      renderClientsTable();
+    }
+
+    function getFilteredClients_() {
+      var q = (document.getElementById("smartInput").value || "").toLowerCase().trim();
+      var onlyEmail = document.getElementById("chkOnlyWithEmail").checked;
+
+      return rawClientsFromSheet.filter(function(c) {
+        if (currentTab === "REMIND" && !c.needsReminder) return false;
+        if (currentTab !== "ALL" && currentTab !== "REMIND" && c.sheet !== currentTab) return false;
+        if (onlyEmail && (!c.emailList || c.emailList.length === 0)) return false;
+        if (!q) return true;
+
+        var hay = [
+          c.company, c.inn, c.lpr, c.emailStr, c.city, c.need, c.relationStatus,
+          (c.stats1C && c.stats1C.pipesPurchased) || "",
+          (c.statsKp && c.statsKp.quotedSummary) || ""
+        ].join(" ").toLowerCase();
+        return hay.indexOf(q) > -1;
+      });
+    }
+
+    function renderClientsTable() {
+      var tbody = document.getElementById("relationsTableBody");
+      var list = getFilteredClients_();
+      tbody.innerHTML = "";
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:18px; color:#64748b;">Клиенты по заданному фильтру не найдены</td></tr>';
+        return;
+      }
+
+      list.forEach(function(c) {
+        var recId = "comp_" + c.key;
+        var isSelected = !!recipientStore[recId];
+        var tr = document.createElement("tr");
+        if (isSelected) tr.className = "is-checked";
+
+        var lprPills = "";
+        (c.lprList || []).forEach(function(p) {
+          var act = isSelected && recipientStore[recId].selectedLprs.indexOf(p) > -1;
+          lprPills += '<span class="person-pill' + (act ? ' active' : '') + '" style="margin-right:4px; margin-bottom:3px; display:inline-block;" onclick="onLprPillClick(event, \'' + c.key + '\', \'' + p.replace(/'/g, "\\'") + '\')">' + p + '</span>';
+        });
+        if (!lprPills) lprPills = '<span style="color:#94a3b8;">Не указан</span>';
+
+        var s1c = c.stats1C || {};
+        var tradeHtml = s1c.has1C
+          ? ('<div style="font-weight:800; color:#0f172a;">' + (s1c.tonsFormatted || '') + (s1c.revenueFormatted ? ' • ' + s1c.revenueFormatted : '') + '</div>' +
+             '<div style="font-size:11px; color:#64748b;">' + (s1c.updCount ? s1c.updCount + ' УПД' : '') + (s1c.lastOrderDate ? ' • посл. ' + s1c.lastOrderDate : '') + '</div>')
+          : '<span style="color:#94a3b8;">Без отгрузок в 1С</span>';
+
+        var pipesAndNeed = [];
+        if (s1c.pipesPurchased) pipesAndNeed.push('<div style="color:#1e293b; font-size:11.5px;"><b>1С:</b> ' + s1c.pipesPurchased.slice(0, 85) + '</div>');
+        if (c.need) pipesAndNeed.push('<div style="color:#15803d; font-size:11.5px; font-weight:700;">Заявка H: ' + c.need + '</div>');
+        if (pipesAndNeed.length === 0) pipesAndNeed.push('<span style="color:#94a3b8;">—</span>');
+
+        var sKp = c.statsKp || {};
+        var relHtml = '<div style="font-weight:700; color:#0f172a;">' + (c.relationStatus || '') + '</div>';
+        if (sKp.lastKpDate) {
+          relHtml += '<div style="font-size:11px; color:#0284c7;">КП от ' + sKp.lastKpDate + (sKp.quotedSummary ? ': ' + sKp.quotedSummary : '') + '</div>';
+        }
+        if (c.emailStr) {
+          relHtml += '<div style="font-size:11px; color:#64748b;">✉️ ' + c.emailStr + '</div>';
+        } else {
+          relHtml += '<div style="font-size:11px; color:#dc2626;">нет email (мессенджер: ' + (c.phone || '—') + ')</div>';
+        }
+
+        var sheetShort = c.key === "__TEST_COMPANY__" ? "🧪 ТЕСТ" : c.sheet.replace(/^\d+\.\s*/, "");
+
+        tr.innerHTML =
+          '<td style="text-align:center;"><input type="checkbox" class="custom-chk" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleCompanySelection(\'' + c.key + '\')"></td>' +
+          '<td><div style="font-weight:800; color:#0f172a;">' + c.company + '</div><div style="font-size:11px; color:#64748b;">' + sheetShort + (c.city ? ' • ' + c.city : '') + (c.inn ? ' • ИНН ' + c.inn : '') + '</div></td>' +
+          '<td onclick="event.stopPropagation();">' + lprPills + '</td>' +
+          '<td>' + tradeHtml + '</td>' +
+          '<td>' + pipesAndNeed.join('') + '</td>' +
+          '<td>' + relHtml + '</td>';
+
+        tr.onclick = function() { toggleCompanySelection(c.key); };
+        tbody.appendChild(tr);
+      });
+    }
+
+    function toggleCompanySelection(clientKey, forceAdd) {
+      var c = rawClientsFromSheet.find(function(item) { return item.key === clientKey; });
+      if (!c) return;
+      var recId = "comp_" + c.key;
+
+      if (recipientStore[recId] && !forceAdd) {
+        delete recipientStore[recId];
+      } else if (!recipientStore[recId]) {
+        var lprOptions = c.lprList || [];
+        var defaultLprs = lprOptions.length > 0 ? [lprOptions[0]] : [];
+        var allEmails = (c.emailList || []).slice();
+
+        recipientStore[recId] = {
+          id: recId,
+          key: c.key,
+          label: c.company,
+          lprOptions: lprOptions,
+          selectedLprs: defaultLprs,
+          emailOptions: allEmails,
+          selectedEmails: allEmails.slice(),
+          clientObj: JSON.parse(JSON.stringify(c))
+        };
+        syncClientObjFields_(recipientStore[recId]);
+      }
+
+      renderClientsTable();
+      renderRecipientChips();
+      updatePartnerCardPreviewFromPrimaryClient();
+    }
+
+    function onLprPillClick(ev, clientKey, personName) {
+      ev.stopPropagation();
+      var recId = "comp_" + clientKey;
+      if (!recipientStore[recId]) {
+        toggleCompanySelection(clientKey, true);
+        recipientStore[recId].selectedLprs = [personName];
+        syncClientObjFields_(recipientStore[recId]);
+      } else {
+        var r = recipientStore[recId];
+        var idx = r.selectedLprs.indexOf(personName);
+        if (idx > -1) r.selectedLprs.splice(idx, 1);
+        else r.selectedLprs.push(personName);
+        syncClientObjFields_(r);
+      }
+      renderClientsTable();
+      renderRecipientChips();
+    }
+
+    function syncClientObjFields_(r) {
+      if (!r || !r.clientObj) return;
+      r.clientObj.selectedLprs = r.selectedLprs.slice();
+      r.clientObj.selectedLpr = r.selectedLprs.join(", ");
+      r.clientObj.selectedEmails = r.selectedEmails.slice();
+      r.clientObj.emailStr = r.selectedEmails.join(", ");
+    }
+
+    function renderRecipientChips() {
+      var box = document.getElementById("selectedRecipientsBox");
+      var wrap = document.getElementById("recipientChipsWrap");
+      var keys = Object.keys(recipientStore);
+
+      if (keys.length === 0) {
+        box.style.display = "none";
+        wrap.innerHTML = "";
+        return;
+      }
+
+      box.style.display = "block";
+      wrap.innerHTML = "";
+
+      keys.forEach(function(recId) {
+        var r = recipientStore[recId];
+        var row = document.createElement("div");
+        row.className = "selected-recipient-row";
+
+        var lprHtml = "";
+        if (r.lprOptions && r.lprOptions.length > 0) {
+          lprHtml = '<div class="mini-pills-wrap"><span class="mini-label">ЛПР:</span>';
+          r.lprOptions.forEach(function(p) {
+            var act = r.selectedLprs.indexOf(p) > -1;
+            lprHtml += '<span class="person-pill' + (act ? ' active' : '') + '" onclick="onLprPillClick(event, \'' + r.key + '\', \'' + p.replace(/'/g, "\\'") + '\')">' + p + '</span>';
+          });
+          lprHtml += '</div>';
+        }
+
+        var emHtml = '<div class="mini-pills-wrap"><span class="mini-label">Email:</span>';
+        (r.emailOptions || []).forEach(function(em) {
+          var on = r.selectedEmails.indexOf(em) > -1;
+          emHtml += '<span class="email-pill' + (on ? '' : ' off') + '" onclick="toggleEmailForRecipient(\'' + recId + '\', \'' + em + '\')">' + em + '</span>';
+        });
+        emHtml += '</div>';
+
+        row.innerHTML =
+          '<div><span class="sel-comp-name">' + r.label + '</span></div>' +
+          '<div class="sel-controls-group">' + lprHtml + emHtml +
+            '<button type="button" class="btn-remove-rec" onclick="removeRecipient(\'' + recId + '\')">✕</button>' +
+          '</div>';
+        wrap.appendChild(row);
+      });
+    }
+
+    function toggleEmailForRecipient(recId, emailAddr) {
+      var r = recipientStore[recId];
+      if (!r) return;
+      var idx = r.selectedEmails.indexOf(emailAddr);
+      if (idx > -1) {
+        if (r.selectedEmails.length > 1) r.selectedEmails.splice(idx, 1);
+      } else {
+        r.selectedEmails.push(emailAddr);
+      }
+      syncClientObjFields_(r);
+      renderRecipientChips();
+    }
+
+    function removeRecipient(recId) {
+      delete recipientStore[recId];
+      renderClientsTable();
+      renderRecipientChips();
+      updatePartnerCardPreviewFromPrimaryClient();
+    }
+
+    function selectAllVisibleWithEmail() {
+      getFilteredClients_().forEach(function(c) {
+        if (c.emailList && c.emailList.length > 0 && c.key !== "__TEST_COMPANY__") {
+          toggleCompanySelection(c.key, true);
+        }
+      });
+    }
+
+    function clearAllRecipients() {
+      recipientStore = {};
+      renderClientsTable();
+      renderRecipientChips();
+      updatePartnerCardPreviewFromPrimaryClient();
+    }
+
+    function onSmartKeyDown(ev) {
+      if (ev.key === "Enter") {
+        var val = document.getElementById("smartInput").value.trim();
+        if (val.indexOf("@") > -1) addManualEmailFromInput();
+      }
+    }
+
+    function addManualEmailFromInput() {
+      var inp = document.getElementById("smartInput");
+      var val = inp.value.trim().replace(/,/g, "");
+      if (!val || val.indexOf("@") === -1) {
+        showToast("Введите Email с символом @ в поле поиска", "warn");
+        return;
+      }
+      var recId = "manual_" + val;
+      recipientStore[recId] = {
+        id: recId,
+        key: recId,
+        label: val,
+        lprOptions: [],
+        selectedLprs: [],
+        emailOptions: [val],
+        selectedEmails: [val],
+        clientObj: {
+          key: recId,
+          company: "Партнёр",
+          emailStr: val,
+          selectedEmails: [val],
+          stats1C: getCustomStatsOverrideFromInputs().stats1C,
+          statsKp: getCustomStatsOverrideFromInputs().statsKp
+        }
+      };
+      inp.value = "";
+      renderRecipientChips();
+    }
+
+    function syncClientFromActiveSheetRow(showMsg) {
+      if (typeof google === "undefined" || !google.script || !google.script.run) return;
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && Array.isArray(res.clients)) {
+            rawClientsFromSheet = [DEMO_TEST_CLIENT].concat(res.clients.map(normalizeClientRecord_));
+            updateTabCounts();
+            if (res.prefillClientKey) {
+              recipientStore = {};
+              toggleCompanySelection(res.prefillClientKey, true);
+            }
+            renderClientsTable();
+            renderRecipientChips();
+            if (showMsg) showToast("Аналитика отношений и 1С обновлена из таблицы", "success");
+          }
+        })
+        .getFollowUpRelationshipLive();
+    }
+
+    function getActiveClientsPayload_() {
+      return Object.keys(recipientStore).map(function(k) {
+        syncClientObjFields_(recipientStore[k]);
+        return recipientStore[k].clientObj;
+      });
+    }
+
+    function getActiveClientGreetingName_() {
+      var clients = getActiveClientsPayload_();
+      if (clients.length === 1) {
+        var raw = clients[0].selectedLpr || clients[0].lpr || "";
+        var first = raw.split(/[\n\/;,]+/)[0].trim();
+        if (first) {
+          var parts = first.split(/\s+/);
+          if (parts.length === 3) return parts[1] + " " + parts[2];
+          return first;
+        }
+      }
+      return "";
+    }
+
+    function copyFollowUpForMessenger() {
+      var lprName = getActiveClientGreetingName_();
+      var msgBody = document.getElementById("inputCustomMessage").value.trim();
+      var offerLine = document.getElementById("inputCustomOffer").value.trim();
+      var includeRubles = document.getElementById("chkIncludeRubles").checked;
+      var override = getCustomStatsOverrideFromInputs();
+      var s1c = override.stats1C;
+      var sKp = override.statsKp;
+
+      var lines = [];
+      lines.push(lprName ? ("Здравствуйте, " + lprName + "!\n") : "Здравствуйте!\n");
+      if (msgBody) lines.push(msgBody + "\n");
+
+      if (s1c.has1C) {
+        lines.push("📊 НАША ИСТОРИЯ СОТРУДНИЧЕСТВА (ООО «Капитал-Плюс»):");
+        lines.push("• Статус: " + s1c.partnerStatus + (s1c.years ? " (" + s1c.years + ")" : ""));
+        lines.push("• Поставленный объём: " + s1c.tonsFormatted + (s1c.updCount ? " (" + s1c.updCount + " партий / УПД)" : "") + (s1c.lastOrderDate ? ", крайняя отгрузка: " + s1c.lastOrderDate : ""));
+        if (includeRubles && s1c.revenueFormatted) {
+          lines.push("• Сумма поставок с НДС: " + s1c.revenueFormatted + (s1c.avgPriceFormatted ? " (ср. чек: " + s1c.avgPriceFormatted + ")" : ""));
+        }
+        if (s1c.pipesPurchased) {
+          lines.push("• Поставлявшиеся позиции: " + s1c.pipesPurchased);
+        }
+      }
+      if (sKp.lastKpDate || sKp.quotedSummary) {
+        lines.push("• Текущее КП / Потребность: " + [sKp.lastKpDate ? "от " + sKp.lastKpDate : "", sKp.quotedSummary].filter(Boolean).join(" — "));
+      }
+      if (offerLine) {
+        lines.push("\n🎯 Персональное предложение / Условия торга:\n" + offerLine);
+      }
+
+      lines.push("\n-----------------------------------");
+      lines.push("ООО «Капитал-Плюс» • База: г. Воронеж");
+      lines.push("Прямая связь: +7 (906) 588-37-77 (Кирилл)");
+
+      copyToClipboardSafe(lines.join("\n"), function() {
+        var label = document.getElementById("btnCopyLabel");
+        var clients = getActiveClientsPayload_();
+        label.innerText = "✅ Скопировано со статистикой!";
+        showToast("Текст напоминалки со статистикой торга скопирована для мессенджера!", "success");
+
+        if (clients.length > 0 && typeof google !== "undefined" && google.script && google.script.run) {
+          google.script.run.logFollowUpClientAction({
+            nextDays: parseInt(document.getElementById("selectNextDays").value, 10) || 3,
+            offerLine: offerLine,
+            clients: clients
+          });
+        }
+        setTimeout(function() { label.innerText = "💬 Скопировать Напоминалку со статистикой в Мессенджер"; }, 2400);
+      });
+    }
+
+    function executeSendFollowUp(isDraftOnly) {
+      var pendingVal = document.getElementById("smartInput").value.trim().replace(/,/g, "");
+      if (pendingVal && pendingVal.indexOf("@") > -1) addManualEmailFromInput();
+
+      var clients = getActiveClientsPayload_();
+      if (clients.length === 0) {
+        showToast("Выберите клиента галочкой или нажмите «🧪 Тестовая фирма (на себя)»!", "warn");
+        return;
+      }
+
+      var btn = document.getElementById(isDraftOnly ? "btnDraftProposal" : "btnSendProposal");
+      var origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerText = isDraftOnly ? "Создаем черновик..." : "Отправляем...";
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          if (res && res.success) {
+            var msg = res.isDraft
+              ? ("Черновик Напоминалки создан в Gmail (" + res.sentCount + " шт.)")
+              : ("Напоминалка с Картой партнёра отправлена (" + res.sentCount + " шт.)!");
+            showToast(msg, "success");
+          } else {
+            showToast("Ошибка: " + ((res && res.message) || "не удалось отправить"), "error");
+          }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+          showToast("Ошибка сервера: " + err.message, "error");
+        })
+        .sendBatchFollowUpEmails({
+          clients: clients,
+          scenarioKey: currentScenario,
+          customMessageText: document.getElementById("inputCustomMessage").value.trim(),
+          customOfferLine: document.getElementById("inputCustomOffer").value.trim(),
+          createDraftOnly: Boolean(isDraftOnly),
+          includeRubles: document.getElementById("chkIncludeRubles").checked,
+          nextDays: parseInt(document.getElementById("selectNextDays").value, 10) || 3,
+          customStatsOverride: getCustomStatsOverrideFromInputs()
+        });
+    }
+  </script>
+</body>
+</html>
