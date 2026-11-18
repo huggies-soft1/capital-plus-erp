@@ -1,15 +1,35 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.3)
- * Файл: Warehouse.gs — Работа со складом (15 колонок A–O), расчеты, цех, калькулятор
- * и автоматический сброс подсветок при очистке ячеек или строк (Delete / Backspace).
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.2)
+ * Файл: Warehouse.js — Работа со складом (15 колонок A–O), физика допуска стенки ГОСТ,
+ * расчеты по номиналу и фактическим весам, цех переработки и сброс подсветок.
  */
 
 const MIN_MARGIN_PER_TON = 3000;
 
+/**
+ * Универсальный поиск листа Склада (поддерживает и «5. Склад», и «Склад»)
+ */
+function getWarehouseSheet_(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  const candidates = ['5. Склад', 'Склад'];
+  for (let i = 0; i < candidates.length; i++) {
+    const sh = typeof getSheetByNameSafe === 'function'
+      ? getSheetByNameSafe(ss, candidates[i])
+      : ss.getSheetByName(candidates[i]);
+    if (sh) return sh;
+  }
+  const allSheets = ss.getSheets();
+  for (let i = 0; i < allSheets.length; i++) {
+    const clean = allSheets[i].getName().toLowerCase().replace(/^\d+\.\s*/, '').trim();
+    if (clean === 'склад') return allSheets[i];
+  }
+  return null;
+}
+
 function openCalculatorSidebar() {
   const html = HtmlService.createHtmlOutputFromFile('Calculator')
     .setTitle('Калькулятор • Маржа • Цех')
-    .setWidth(380);
+    .setWidth(390);
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
@@ -31,11 +51,27 @@ function formatCleanPipeTitle_(str) {
 }
 
 /**
+ * Извлекает фактический замер стенки из примечания склада (например: «факт 9.2», «стенка 7.4 мм»)
+ */
+function extractActualWallFromNotes_(notesStr, nominalWall) {
+  if (!notesStr || !nominalWall) return null;
+  const s = String(notesStr).toLowerCase();
+  const m = s.match(/(?:факт|замер|стенка|реал)[а-яё\s:=-]*(\d+(?:[.,]\d+)?)/i);
+  if (!m) return null;
+  const val = parseFloat(m[1].replace(',', '.'));
+  if (isNaN(val) || val <= 0) return null;
+  if (Math.abs(val - nominalWall) <= nominalWall * 0.35) {
+    return val;
+  }
+  return null;
+}
+
+/**
  * Быстрое чтение склада за 1 обращение к листу (A3:O)
  */
 function getPipesData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад');
+  const sheet = getWarehouseSheet_(ss);
   if (!sheet) return [];
 
   const lastRow = sheet.getLastRow();
@@ -47,7 +83,9 @@ function getPipesData() {
     const rawName = (row[1] || '').toString().trim(); // B
     const diam    = safeParseFloat(row[3]);           // D
     const wall    = safeParseFloat(row[4]);           // E
+    const notes   = (row[13] || '').toString().trim(); // N
     const weightPerMeterKg = (diam > 0 && wall > 0) ? (diam - wall) * wall * 0.0246615 : 0;
+    const detectedActualWall = extractActualWallFromNotes_(notes, wall);
 
     return {
       rowIndex: idx + 3,
@@ -56,6 +94,7 @@ function getPipesData() {
       condition: (row[2] || '').toString().trim(),    // C
       diam: diam,                                     // D
       wall: wall,                                     // E
+      actualWallHint: detectedActualWall,             // Подсказка факт. стенки из примечания N
       gost: (row[5] || '').toString().trim(),         // F
       buyPriceTn: safeParseFloat(row[6]),             // G: Закупка ₽/тн
       priceTn: safeParseFloat(row[7]),                // H: Продажа ₽/тн
@@ -63,7 +102,7 @@ function getPipesData() {
       status: (row[9] || '').toString().trim(),       // J: Наличие
       stockTn: safeParseFloat(row[10]),               // K: Остаток тн
       stockM: safeParseFloat(row[11]),                // L: Остаток м
-      notes: (row[13] || '').toString().trim(),       // N: Примечания
+      notes: notes,                                   // N: Примечания
       weightPerMeterKg: weightPerMeterKg,
       minMarginPerTon: MIN_MARGIN_PER_TON
     };
@@ -72,13 +111,14 @@ function getPipesData() {
 
 /**
  * Пакетное списание остатков при отгрузке через калькулятор
+ * Поддерживает 2 режима: «По теорет. весу (Номинал)» и «По весам (Факт. стенка)»
  */
 function executeBatchDeduction(cartItems) {
   if (!cartItems || cartItems.length === 0) return "Корзина пуста!";
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад');
-  if (!sheet) throw new Error("Лист «Склад» не найден!");
+  const sheet = getWarehouseSheet_(ss);
+  if (!sheet) throw new Error("Лист «5. Склад» («Склад») не найден!");
 
   let report = [];
   const now = new Date();
@@ -91,26 +131,39 @@ function executeBatchDeduction(cartItems) {
 
     const actualName = sheet.getRange(row, 2).getValue().toString().trim();
     if (normalizePipeName(actualName) !== normalizePipeName(item.name)) {
-      throw new Error(`⚠ Позиция в строке ${row} изменилась (ожидалась "${item.name}", сейчас "${actualName}"). Обновите калькулятор.`);
+      throw new Error(`Позиция в строке ${row} изменилась (ожидалась "${item.name}", сейчас "${actualName}"). Обновите калькулятор.`);
     }
 
     const currentM = safeParseFloat(sheet.getRange(row, 12).getValue()); // L: Остаток м
     const deductM  = safeParseFloat(item.meters);
-    const deductTn = safeParseFloat(item.tons);
+    const billableTn = safeParseFloat(item.tons); // Оплачиваемый вес по условиям сделки (номинал или весы)
     const newM     = Math.max(0, Math.round((currentM - deductM) * 10) / 10);
 
     const diam = safeParseFloat(sheet.getRange(row, 4).getValue()); // D
     const wall = safeParseFloat(sheet.getRange(row, 5).getValue()); // E
     const weightPerMeterTn = ((diam - wall) * wall * 0.0246615) / 1000;
 
+    // Учетный тоннаж, физически уходящий со склада (строго по геометрии склада)
+    const stockDeductTn = (deductM > 0 && weightPerMeterTn > 0)
+      ? (deductM * weightPerMeterTn)
+      : (safeParseFloat(item.stockTons) || billableTn);
+
     const buyPriceTn  = safeParseFloat(sheet.getRange(row, 7).getValue()); // G: Закупка
     const dealPriceTn = safeParseFloat(item.dealPriceTn) || safeParseFloat(sheet.getRange(row, 8).getValue()); // H: Продажа
 
-    if (buyPriceTn > 0 && (dealPriceTn - buyPriceTn) < MIN_MARGIN_PER_TON) {
+    const itemRevenue = Math.round(dealPriceTn * billableTn);
+    const itemCost    = Math.round(buyPriceTn * stockDeductTn);
+    const itemMargin  = itemRevenue - itemCost;
+    const effectiveMarginPerStockTn = stockDeductTn > 0 ? (itemMargin / stockDeductTn) : (dealPriceTn - buyPriceTn);
+
+    if (buyPriceTn > 0 && effectiveMarginPerStockTn < MIN_MARGIN_PER_TON) {
+      const scaleNote = item.weightMode === 'actual'
+        ? `\nУчтён недовес на весах (факт. стенка ${item.actualWall} мм вместо ${wall} мм: оплачивается ${billableTn.toFixed(3)} тн при списании ${stockDeductTn.toFixed(3)} тн со склада).`
+        : '';
       throw new Error(
-        `⛔ СТОП-ЛОСС по позиции «${item.name}»!\n` +
+        `СТОП-ЛОСС по позиции «${item.name}»!\n` +
         `Закупка: ${buyPriceTn.toLocaleString('ru-RU')} ₽/тн, Цена сделки: ${dealPriceTn.toLocaleString('ru-RU')} ₽/тн.\n` +
-        `Маржа ниже порога ${MIN_MARGIN_PER_TON.toLocaleString('ru-RU')} ₽/тн!`
+        `Приведенная маржа: ${Math.round(effectiveMarginPerStockTn).toLocaleString('ru-RU')} ₽/тн (ниже порога ${MIN_MARGIN_PER_TON.toLocaleString('ru-RU')} ₽/тн)!${scaleNote}`
       );
     }
 
@@ -135,22 +188,23 @@ function executeBatchDeduction(cartItems) {
 
     sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm'); // O: Обновлено
 
-    const itemRevenue = Math.round(dealPriceTn * deductTn);
     totalRevenue += itemRevenue;
+    const weightDetails = (item.weightMode === 'actual' && item.actualWall)
+      ? `-${deductM} м (весы факт ${item.actualWall} мм: ${billableTn.toFixed(3)} тн / склад: ${stockDeductTn.toFixed(3)} тн)`
+      : `-${deductM} м (~${billableTn.toFixed(3)} тн по теорет. весу)`;
 
     if (buyPriceTn > 0) {
       hasBuyData = true;
-      const itemMargin = Math.round((dealPriceTn - buyPriceTn) * deductTn);
       totalMargin += itemMargin;
-      report.push(`• ${item.name}: -${deductM} м (~${deductTn.toFixed(3)} тн) | Маржа: +${itemMargin.toLocaleString('ru-RU')} ₽`);
+      report.push(`• ${item.name}: ${weightDetails} | Маржа: +${itemMargin.toLocaleString('ru-RU')} ₽`);
     } else {
-      report.push(`• ${item.name}: -${deductM} м (~${deductTn.toFixed(3)} тн)`);
+      report.push(`• ${item.name}: ${weightDetails}`);
     }
   });
 
-  let summaryText = `✅ Списано со склада на сумму: ${totalRevenue.toLocaleString('ru-RU')} ₽\n`;
+  let summaryText = `Списано со склада на сумму: ${totalRevenue.toLocaleString('ru-RU')} ₽\n`;
   if (hasBuyData) {
-    summaryText += `💰 Чистая маржа со сделки: +${totalMargin.toLocaleString('ru-RU')} ₽\n`;
+    summaryText += `Чистая маржа со сделки: +${totalMargin.toLocaleString('ru-RU')} ₽\n`;
   }
   return summaryText + `\n` + report.join("\n");
 }
@@ -162,8 +216,8 @@ function executeBatchAddition(cartItems) {
   if (!cartItems || cartItems.length === 0) return "Корзина пуста!";
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад');
-  if (!sheet) throw new Error("Лист «Склад» не найден!");
+  const sheet = getWarehouseSheet_(ss);
+  if (!sheet) throw new Error("Лист «5. Склад» («Склад») не найден!");
 
   let report = [];
   const now = new Date();
@@ -212,13 +266,13 @@ function executeBatchAddition(cartItems) {
       }
 
       formatNewWarehouseRow_(sheet, row, diam, wall, now);
-      report.push(`➕ НОВАЯ: ${cleanName} (${item.condition}, ${gostValue}) — ${addTn.toFixed(3)} тн`);
+      report.push(`+ НОВАЯ: ${cleanName} (${item.condition}, ${gostValue}) — ${addTn.toFixed(3)} тн`);
     } else {
       row = item.rowIndex;
       const actualName = sheet.getRange(row, 2).getValue().toString().trim();
 
       if (normalizePipeName(actualName) !== normalizePipeName(item.name)) {
-        throw new Error(`⚠ Позиция в строке ${row} изменилась (ожидалась "${item.name}"). Обновите окно.`);
+        throw new Error(`Позиция в строке ${row} изменилась (ожидалась "${item.name}"). Обновите окно.`);
       }
 
       const currentM  = safeParseFloat(sheet.getRange(row, 12).getValue()); // L
@@ -253,22 +307,22 @@ function executeBatchAddition(cartItems) {
       }
 
       sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm'); // O
-      report.push(`📥 ${item.name}: +${addTn.toFixed(3)} тн (Стало: ${newTn.toFixed(3)} тн)`);
+      report.push(`• ${item.name}: +${addTn.toFixed(3)} тн (Стало: ${newTn.toFixed(3)} тн)`);
     }
   });
 
-  return `✅ Успешно оприходовано!\n\n` + report.join("\n");
+  return `Успешно оприходовано!\n\n` + report.join("\n");
 }
 
 /**
- * Переработка (Цех): Б/у ➔ Восстановленная (со средневзвешенной себестоимостью)
+ * Переработка (Цех): Б/у -> Восстановленная (со средневзвешенной себестоимостью)
  */
 function executeBatchRestoration(cartItems) {
   if (!cartItems || cartItems.length === 0) return "Буфер цеха пуст!";
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад');
-  if (!sheet) throw new Error("Лист «Склад» не найден!");
+  const sheet = getWarehouseSheet_(ss);
+  if (!sheet) throw new Error("Лист «5. Склад» («Склад») не найден!");
 
   const now = new Date();
   let report = [];
@@ -277,7 +331,7 @@ function executeBatchRestoration(cartItems) {
     const srcRow = item.rowIndex;
     const actualName = sheet.getRange(srcRow, 2).getValue().toString().trim();
     if (normalizePipeName(actualName) !== normalizePipeName(item.name)) {
-      throw new Error(`⚠ Исходная позиция Б/у в строке ${srcRow} изменилась. Обновите калькулятор.`);
+      throw new Error(`Исходная позиция Б/у в строке ${srcRow} изменилась. Обновите калькулятор.`);
     }
 
     const diam = safeParseFloat(sheet.getRange(srcRow, 4).getValue());
@@ -364,7 +418,7 @@ function executeBatchRestoration(cartItems) {
       if (targetNotes) sheet.getRange(targetRow, 14).setValue(targetNotes);
       sheet.getRange(targetRow, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
 
-      report.push(`⚙️ ${cleanPipeName}: ${moveTn.toFixed(3)} тн переведено из Б/у в «Восстановленная» (строка ${targetRow}).`);
+      report.push(`• ${cleanPipeName}: ${moveTn.toFixed(3)} тн переведено из Б/у в «Восстановленная» (строка ${targetRow}).`);
     } else {
       const newRow = sheet.getLastRow() + 1;
       sheet.getRange(newRow, 1).setValue(targetCat);
@@ -387,7 +441,7 @@ function executeBatchRestoration(cartItems) {
       sheet.getRange(newRow, 14).setValue(targetNotes);
 
       formatNewWarehouseRow_(sheet, newRow, diam, wall, now);
-      report.push(`⚙️ НОВАЯ ВОССТ.: ${cleanPipeName} — ${moveTn.toFixed(3)} тн.`);
+      report.push(`+ НОВАЯ ВОССТ.: ${cleanPipeName} — ${moveTn.toFixed(3)} тн.`);
     }
   });
 
@@ -395,7 +449,7 @@ function executeBatchRestoration(cartItems) {
     sortWarehouseData();
   }
 
-  return `✅ Переработка (Б/у ➔ Восстановленная) выполнена!\n\n` + report.join("\n\n");
+  return `Переработка (Б/у -> Восстановленная) выполнена!\n\n` + report.join("\n\n");
 }
 
 function executeBatchRestore(cartItems) {
@@ -437,7 +491,6 @@ function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
 function cleanupWarehouseRowIfEmpty_(sheet, row) {
   if (row < 3) return false;
   const vals = sheet.getRange(row, 1, 1, 14).getValues()[0];
-  // Проверяем, есть ли хоть что-то кроме одинокого статуса в J(10) или даты в O(15)
   const hasCoreData = vals.some((v, idx) => idx !== 9 && v !== null && v !== undefined && String(v).trim() !== '');
   if (hasCoreData) return false;
 
@@ -454,7 +507,7 @@ function handleMultiCellWarehouseEdit_(e, sheet) {
 }
 
 /**
- * ЕДИНЫЙ ТРИГГЕР ДЛЯ ЛИСТА «СКЛАД» (15 колонок)
+ * ЕДИНЫЙ ТРИГГЕР ДЛЯ ЛИСТА «5. СКЛАД» / «СКЛАД» (15 колонок)
  */
 function handleWarehouseSheetEdit(e, sheet) {
   if (!e || !e.range || e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) return;
@@ -582,7 +635,7 @@ function handleWarehouseSheetEdit(e, sheet) {
     if (col === 7) {
       const curSellTn = safeParseFloat(rowData[4]); // H (8)
       if (val > 0 && curSellTn > 0 && (curSellTn - val) < MIN_MARGIN_PER_TON) {
-        ss.toast(`⚠️ Маржа (${(curSellTn - val).toLocaleString('ru-RU')} ₽/тн) ниже порога Стоп-Лосса (${MIN_MARGIN_PER_TON} ₽/тн)!`, "⛔ Контроль маржи", 5);
+        ss.toast(`Маржа (${(curSellTn - val).toLocaleString('ru-RU')} ₽/тн) ниже порога Стоп-Лосса (${MIN_MARGIN_PER_TON} ₽/тн)!`, "Контроль маржи", 5);
       }
       sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
       return;
@@ -591,7 +644,7 @@ function handleWarehouseSheetEdit(e, sheet) {
     if (col === 8) {
       if (val > 0) {
         if (buyPriceTn > 0 && (val - buyPriceTn) < MIN_MARGIN_PER_TON) {
-          ss.toast(`⚠️ СТОП-ЛОСС! Маржа ${(val - buyPriceTn).toLocaleString('ru-RU')} ₽/тн (минимум ${MIN_MARGIN_PER_TON} ₽/тн)!`, "⛔ Низкая маржа", 5);
+          ss.toast(`СТОП-ЛОСС! Маржа ${(val - buyPriceTn).toLocaleString('ru-RU')} ₽/тн (минимум ${MIN_MARGIN_PER_TON} ₽/тн)!`, "Низкая маржа", 5);
         }
         sheet.getRange(row, 9).setValue(Math.round(val * weightPerMeterTn)); // I
         const currentTn = safeParseFloat(rowData[7]); // K (11)

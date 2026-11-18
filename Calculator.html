@@ -32,7 +32,7 @@
     .tab-btn.active-add { background: #fff; color: var(--success); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .tab-btn.active-restore { background: #fff; color: var(--amber); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-    .pipe-list { max-height: 195px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; padding-right: 3px; }
+    .pipe-list { max-height: 185px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; padding-right: 3px; }
     .section-divider { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; background: #f1f5f9; padding: 5px 8px; border-radius: 5px; margin-top: 4px; }
     .pipe-card { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s ease; user-select: none; }
     .pipe-card:hover { border-color: #94a3b8; background: #f8fafc;}
@@ -45,6 +45,89 @@
     .badge-stale { background: #e0e7ff; color: #3730a3; }
     .badge-used { background: #f1f5f9; color: #475569; }
     .badge-hint { background: #fef3c7; color: #92400e; font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: 800; }
+
+    /* Блок физики допуска стенки ГОСТ и режима весов */
+    .gost-physics-box {
+      display: none;
+      margin-top: 8px;
+      padding: 9px 10px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    .weight-mode-switch {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      background: #e2e8f0;
+      padding: 3px;
+      border-radius: 6px;
+    }
+    .wm-btn {
+      padding: 6px 4px;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-align: center;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #475569;
+      border: none;
+      background: transparent;
+      transition: all 0.15s;
+    }
+    .wm-btn.active-nom { background: #0f172a; color: #ffffff; }
+    .wm-btn.active-act { background: #d97706; color: #ffffff; }
+
+    .gost-presets {
+      display: flex;
+      gap: 4px;
+      margin-top: 5px;
+      flex-wrap: wrap;
+    }
+    .preset-chip {
+      flex: 1;
+      padding: 4px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #334155;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .preset-chip:hover { border-color: var(--amber); background: #fffbeb; }
+
+    .physics-info {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      background: #eff6ff;
+      color: #1e3a8a;
+      border: 1px solid #bfdbfe;
+    }
+    .physics-info.warn-scale {
+      background: #fffbeb;
+      color: #92400e;
+      border-color: #fde68a;
+    }
+    .btn-apply-scale-price {
+      width: 100%;
+      margin-top: 5px;
+      padding: 5px 8px;
+      font-size: 10.5px;
+      font-weight: 800;
+      background: #d97706;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .btn-apply-scale-price:hover { background: #b45309; }
 
     .margin-bar {
       display: none;
@@ -86,9 +169,9 @@
 <body>
 
   <div class="tabs">
-    <div class="tab-btn active-deduct" id="tabDeduct" onclick="switchMode('deduct')">🔴 ОТГРУЗКА</div>
-    <div class="tab-btn" id="tabAdd" onclick="switchMode('add')">🟢 ПРИЁМКА</div>
-    <div class="tab-btn" id="tabRestore" onclick="switchMode('restore')">⚙️ ВОССТ. (ЦЕХ)</div>
+    <div class="tab-btn active-deduct" id="tabDeduct" onclick="switchMode('deduct')">ОТГРУЗКА</div>
+    <div class="tab-btn" id="tabAdd" onclick="switchMode('add')">ПРИЁМКА</div>
+    <div class="tab-btn" id="tabRestore" onclick="switchMode('restore')">ВОССТ. (ЦЕХ)</div>
   </div>
 
   <div class="card">
@@ -97,7 +180,7 @@
       <input type="text" id="pipeSearch" placeholder="Например: 530х8, 630, нефть..." autocomplete="off" onkeyup="filterSelect()">
     </div>
 
-    <button class="btn btn-new-pipe" id="btnShowNewForm" style="display:none;" onclick="toggleNewForm(true)">➕ Создать новую позицию на складе</button>
+    <button class="btn btn-new-pipe" id="btnShowNewForm" style="display:none;" onclick="toggleNewForm(true)">+ Создать новую позицию на складе</button>
 
     <div id="newPipeForm">
       <div class="close-form" onclick="toggleNewForm(false)">✕ Отмена</div>
@@ -135,7 +218,10 @@
         <option value="Газ">Газ</option>
         <option value="Пар">Пар</option>
         <option value="ГОСТ 10704-91">ГОСТ 10704-91</option>
+        <option value="ГОСТ 32528-2013">ГОСТ 32528-2013</option>
         <option value="ГОСТ 8732-78">ГОСТ 8732-78</option>
+        <option value="ГОСТ 19903">ГОСТ 19903</option>
+        <option value="ГОСТ 32678-2014">ГОСТ 32678-2014</option>
         <option value="—">Без ГОСТа (—)</option>
       </select>
 
@@ -146,7 +232,40 @@
     </div>
 
     <div id="pipeList" class="pipe-list">
-      <div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">⏳ Загрузка склада...</div>
+      <div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">Загрузка склада...</div>
+    </div>
+
+    <!-- Блок физики допуска стенки ГОСТ и режима сдачи (Номинал vs Весы) -->
+    <div id="gostPhysicsBox" class="gost-physics-box">
+      <div class="weight-mode-switch">
+        <button type="button" class="wm-btn active-nom" id="btnWmNominal" onclick="setWeightMode('nominal')">
+          По теорет. весу (Номинал)
+        </button>
+        <button type="button" class="wm-btn" id="btnWmActual" onclick="setWeightMode('actual')">
+          По весам (Факт. стенка)
+        </button>
+      </div>
+
+      <div id="actualWallControls" style="display:none; margin-top:6px;">
+        <div class="grid-2" style="align-items:end;">
+          <div>
+            <label style="margin-top:2px;">Номинал (мм):</label>
+            <input type="text" id="nomWallReadonly" readonly style="background:#f1f5f9; color:#64748b;">
+          </div>
+          <div>
+            <label style="margin-top:2px;">Факт. стенка (мм):</label>
+            <input type="number" id="actualWallInput" step="0.1" min="1" placeholder="9.2" oninput="onActualWallChanged()">
+          </div>
+        </div>
+        <div class="gost-presets">
+          <button type="button" class="preset-chip" onclick="applyGostTolerance(0)">Номинал</button>
+          <button type="button" class="preset-chip" onclick="applyGostTolerance(8)">ГОСТ -8%</button>
+          <button type="button" class="preset-chip" onclick="applyGostTolerance(10)">ГОСТ -10%</button>
+          <button type="button" class="preset-chip" onclick="applyGostTolerance(12.5)">ГОСТ -12.5%</button>
+        </div>
+      </div>
+
+      <div id="physicsInfoBar" class="physics-info"></div>
     </div>
 
     <!-- Блок цены сделки (для Отгрузки и Приёмки) -->
@@ -156,9 +275,9 @@
       <div id="marginBar" class="margin-bar"></div>
     </div>
 
-    <!-- Блок параметров переработки Б/у ➔ Восстановленная (для вкладки ЦЕХ) -->
+    <!-- Блок параметров переработки Б/у -> Восстановленная (для вкладки ЦЕХ) -->
     <div id="restoreConfigBox">
-      <div style="font-size:11px; font-weight:800; color:#9a3412; margin-bottom:4px;">⚙️ ПАРАМЕТРЫ НА ВЫХОДЕ (ВОССТАНОВЛЕННАЯ):</div>
+      <div style="font-size:11px; font-weight:800; color:#9a3412; margin-bottom:4px;">ПАРАМЕТРЫ НА ВЫХОДЕ (ВОССТАНОВЛЕННАЯ):</div>
       <div class="grid-2">
         <div>
           <label>База Б/у (Закупка):</label>
@@ -187,7 +306,7 @@
             <option value="Вода">Вода</option>
             <option value="Нефть">Нефть</option>
             <option value="Пар">Пар</option>
-            <option value="Метал">Метал</option>
+            <option value="Металл">Металл</option>
             <option value="ГОСТ 10704-91">ГОСТ 10704-91</option>
           </select>
         </div>
@@ -209,7 +328,7 @@
 
     <div class="grid-2">
       <div><label for="metersInput">Длина (м):</label><input type="number" id="metersInput" placeholder="0.0" min="0" step="any" oninput="fromMeters()"></div>
-      <div><label for="tonsInput">Вес (тн):</label><input type="number" id="tonsInput" placeholder="0.000" min="0" step="any" oninput="fromTons()"></div>
+      <div><label id="tonsInputLabel" for="tonsInput">Вес теор. (тн):</label><input type="number" id="tonsInput" placeholder="0.000" min="0" step="any" oninput="fromTons()"></div>
     </div>
 
     <button class="btn btn-add-to-cart" id="btnAddToCart" onclick="addToCart()">В буфер операций</button>
@@ -224,14 +343,15 @@
     <div id="cartItems"></div>
 
     <div class="summary-card" id="sumCard">
-      <div class="sum-row"><span>Общий вес:</span><strong id="totalTons">0 тн</strong></div>
+      <div class="sum-row"><span>Оплачиваемый вес:</span><strong id="totalTons">0 тн</strong></div>
+      <div class="sum-row" id="stockTonsRow" style="display:none; color:#64748b; font-size:11px;"><span>Списание со склада (номинал):</span><strong id="totalStockTons">0 тн</strong></div>
       <div class="sum-row" id="sumCostRow"><span>Сумма:</span><strong id="totalCost">0 ₽</strong></div>
       <div class="sum-row" id="sumMarginRow" style="display:none; color:#166534;"><span>Чистая маржа:</span><strong id="totalMargin">+0 ₽</strong></div>
-      <div class="truck-tag" id="truckBadge">🚛 Транспорт: уточняется</div>
+      <div class="truck-tag" id="truckBadge">Транспорт: уточняется</div>
     </div>
 
-    <button class="btn btn-copy-kp" id="btnCopyOffer" onclick="copyOffer()">📋 Скопировать КП для клиента</button>
-    <button class="btn btn-deduct" id="executeBtn" onclick="executeOperation()">➖ Оформить списание</button>
+    <button class="btn btn-copy-kp" id="btnCopyOffer" onclick="copyOffer()">Скопировать КП для клиента</button>
+    <button class="btn btn-deduct" id="executeBtn" onclick="executeOperation()">Оформить списание</button>
   </div>
 
   <script>
@@ -239,11 +359,117 @@
     let cart = [];
     let selectedIdx = null;
     let currentMode = 'deduct'; // 'deduct' | 'add' | 'restore'
+    let weightMode = 'nominal'; // 'nominal' | 'actual'
     let isCreatingNew = false;
 
     window.onload = function() {
       loadInventory();
     };
+
+    function calcKgPerMeter_(diam, wall) {
+      if (!diam || !wall || diam <= wall) return 0;
+      return (diam - wall) * wall * 0.0246615;
+    }
+
+    function getActiveWeightPhysics_() {
+      if (selectedIdx === null || !inventory[selectedIdx]) return null;
+      const p = inventory[selectedIdx];
+      const nomKgM = calcKgPerMeter_(p.diam, p.wall);
+      const actWallInput = parseFloat(document.getElementById('actualWallInput').value);
+      const actWall = (weightMode === 'actual' && actWallInput > 0 && actWallInput < p.diam) ? actWallInput : p.wall;
+      const actKgM = calcKgPerMeter_(p.diam, actWall);
+      const ratio = nomKgM > 0 ? (actKgM / nomKgM) : 1;
+      const diffPct = (ratio - 1) * 100;
+      const baseSell = p.priceTn > 0 ? p.priceTn : (parseFloat(document.getElementById('dealPriceInput').value) || 0);
+      const compensatedPriceTn = (ratio > 0 && baseSell > 0) ? Math.ceil(baseSell / ratio) : baseSell;
+
+      return {
+        diam: p.diam,
+        nomWall: p.wall,
+        actWall: actWall,
+        nomKgM: nomKgM,
+        actKgM: actKgM,
+        ratio: ratio,
+        diffPct: diffPct,
+        compensatedPriceTn: compensatedPriceTn
+      };
+    }
+
+    function setWeightMode(mode) {
+      weightMode = mode;
+      document.getElementById('btnWmNominal').className = 'wm-btn' + (mode === 'nominal' ? ' active-nom' : '');
+      document.getElementById('btnWmActual').className = 'wm-btn' + (mode === 'actual' ? ' active-act' : '');
+      document.getElementById('actualWallControls').style.display = (mode === 'actual') ? 'block' : 'none';
+      document.getElementById('tonsInputLabel').innerText = (mode === 'actual') ? 'Вес на весах (тн):' : 'Вес теор. (тн):';
+
+      if (selectedIdx !== null && inventory[selectedIdx]) {
+        const p = inventory[selectedIdx];
+        document.getElementById('nomWallReadonly').value = p.wall + ' мм';
+        const curAct = parseFloat(document.getElementById('actualWallInput').value);
+        if (!curAct || curAct <= 0) {
+          document.getElementById('actualWallInput').value = p.actualWallHint ? p.actualWallHint : p.wall;
+        }
+      }
+
+      updatePhysicsUI();
+      if (parseFloat(document.getElementById('metersInput').value) > 0) fromMeters();
+      else if (parseFloat(document.getElementById('tonsInput').value) > 0) fromTons();
+      updateMarginPreview();
+    }
+
+    function applyGostTolerance(minusPct) {
+      if (selectedIdx === null || !inventory[selectedIdx]) return;
+      const p = inventory[selectedIdx];
+      const newWall = +(p.wall * (1 - minusPct / 100)).toFixed(2);
+      document.getElementById('actualWallInput').value = newWall;
+      onActualWallChanged();
+    }
+
+    function onActualWallChanged() {
+      updatePhysicsUI();
+      if (parseFloat(document.getElementById('metersInput').value) > 0) fromMeters();
+      else if (parseFloat(document.getElementById('tonsInput').value) > 0) fromTons();
+      updateMarginPreview();
+    }
+
+    function applyCompensatedScalePrice(priceVal) {
+      if (!priceVal || priceVal <= 0) return;
+      document.getElementById('dealPriceInput').value = priceVal;
+      updateMarginPreview();
+    }
+
+    function updatePhysicsUI() {
+      const box = document.getElementById('gostPhysicsBox');
+      const info = document.getElementById('physicsInfoBar');
+      if (currentMode !== 'deduct' || isCreatingNew || selectedIdx === null || !inventory[selectedIdx]) {
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'block';
+      const ph = getActiveWeightPhysics_();
+      if (!ph) return;
+
+      if (weightMode === 'nominal') {
+        info.className = 'physics-info';
+        const hintNote = inventory[selectedIdx].actualWallHint
+          ? `<br>В примечании склада указан факт: <b>${inventory[selectedIdx].actualWallHint} мм</b> (допуск ГОСТ закрывается по номиналу).`
+          : '';
+        info.innerHTML =
+          `Стандарт ГОСТ: 1 п.м. = <b>${ph.nomKgM.toFixed(2)} кг</b> (номинал ${ph.nomWall} мм).` +
+          `<br>Минусовой допуск стенки до -12.5% закрывается по теоретическому весу.${hintNote}`;
+      } else {
+        const diffSign = ph.diffPct > 0 ? '+' : '';
+        const isMinus = ph.diffPct < -0.05;
+        info.className = 'physics-info' + (isMinus ? ' warn-scale' : '');
+        const compBtnHtml = (isMinus && ph.compensatedPriceTn > 0)
+          ? `<button type="button" class="btn-apply-scale-price" onclick="applyCompensatedScalePrice(${ph.compensatedPriceTn})">Подставить цену под весы: ${ph.compensatedPriceTn.toLocaleString('ru-RU')} ₽/тн (+${Math.round((1 / ph.ratio - 1) * 1000) / 10}%)</button>`
+          : '';
+        info.innerHTML =
+          `Вес 1 п.м.: ном. <b>${ph.nomKgM.toFixed(2)} кг</b> → факт. <b>${ph.actKgM.toFixed(2)} кг</b> (<b>${diffSign}${ph.diffPct.toFixed(1)}%</b>)` +
+          compBtnHtml;
+      }
+    }
 
     function switchMode(mode) {
       currentMode = mode;
@@ -260,7 +486,7 @@
 
       if (mode === 'deduct') {
         btnExec.className = 'btn btn-deduct';
-        btnExec.innerText = '➖ Оформить списание';
+        btnExec.innerText = 'Оформить списание';
         priceLabel.innerText = 'Цена сделки (₽/тн):';
         dealBox.style.display = 'block';
         restoreBox.style.display = 'none';
@@ -269,24 +495,27 @@
         toggleNewForm(false);
       } else if (mode === 'add') {
         btnExec.className = 'btn btn-receive';
-        btnExec.innerText = '➕ Оприходовать на склад';
+        btnExec.innerText = 'Оприходовать на склад';
         priceLabel.innerText = 'Закупка партии (₽/тн, необяз.):';
         dealBox.style.display = 'block';
         restoreBox.style.display = 'none';
         document.getElementById('btnShowNewForm').style.display = 'block';
         document.getElementById('btnCopyOffer').style.display = 'none';
+        setWeightMode('nominal');
       } else if (mode === 'restore') {
         btnExec.className = 'btn btn-restore';
-        btnExec.innerText = '⚙️ Перевести Б/у ➔ Восстановленная';
+        btnExec.innerText = 'Перевести Б/у -> Восстановленная';
         dealBox.style.display = 'none';
         restoreBox.style.display = 'block';
         document.getElementById('btnShowNewForm').style.display = 'none';
         document.getElementById('btnCopyOffer').style.display = 'none';
+        setWeightMode('nominal');
         toggleNewForm(false);
       }
 
       clearCart();
       filterSelect();
+      updatePhysicsUI();
       updateMarginPreview();
     }
 
@@ -308,11 +537,12 @@
         document.getElementById("metersInput").disabled = false;
         document.getElementById("metersInput").placeholder = "0.0";
       }
+      updatePhysicsUI();
     }
 
     function loadInventory() {
       const list = document.getElementById("pipeList");
-      list.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">⏳ Загрузка склада...</div>';
+      list.innerHTML = '<div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">Загрузка склада...</div>';
 
       google.script.run
         .withSuccessHandler(function(data) {
@@ -320,7 +550,7 @@
           filterSelect();
         })
         .withFailureHandler(function(err) {
-          list.innerHTML = '<div style="padding:10px; text-align:center; color:#ef4444; font-size:12px; font-weight:700;">❌ Ошибка сервера: ' + err.message + '</div>';
+          list.innerHTML = '<div style="padding:10px; text-align:center; color:#ef4444; font-size:12px; font-weight:700;">Ошибка сервера: ' + err.message + '</div>';
         })
         .getPipesData();
     }
@@ -341,7 +571,8 @@
       const priceTag = p.priceTn > 0 ? `${p.priceTn.toLocaleString('ru-RU')} ₽` : '—';
       const isSelected = (selectedIdx === origIndex);
 
-      const hintHtml = hintBadgeText ? `<span class="badge-hint">${hintBadgeText}</span> ` : '';
+      const wallNoteBadge = p.actualWallHint ? `<span class="badge-hint">факт ${p.actualWallHint}</span> ` : '';
+      const hintHtml = hintBadgeText ? `<span class="badge-hint">${hintBadgeText}</span> ` : wallNoteBadge;
 
       const card = document.createElement("div");
       card.className = "pipe-card" + (isSelected ? " selected" : "") + (isAlt ? " alt-card" : "");
@@ -358,9 +589,6 @@
       return card;
     }
 
-    /**
-     * Умный поиск + Подборщик альтернатив (Б/у под восстановление + соседние стенки)
-     */
     function filterSelect() {
       const rawQuery = document.getElementById("pipeSearch").value.toLowerCase().trim();
       const query = rawQuery.replace(/[x*]/g, 'х');
@@ -381,7 +609,6 @@
         return;
       }
 
-      // 1. Точные совпадения
       const exactMatches = pool.filter(p =>
         p.name.toLowerCase().replace(/x/g, 'х').includes(query) ||
         p.category.toLowerCase().includes(query) ||
@@ -392,12 +619,11 @@
       if (exactMatches.length > 0) {
         const hdr = document.createElement("div");
         hdr.className = "section-divider";
-        hdr.textContent = `🟢 Точное совпадение (${exactMatches.length})`;
+        hdr.textContent = `Точное совпадение (${exactMatches.length})`;
         list.appendChild(hdr);
         exactMatches.forEach(p => list.appendChild(createPipeCardElement(p, '', false)));
       }
 
-      // 2. Умный подбор аналогов (если ищут диаметр/стенку в режиме Отгрузки)
       if (currentMode === 'deduct') {
         const sizeMatch = query.match(/(\d{2,4})(?:\s*х\s*(\d+(?:[.,]\d+)?))?/);
         if (sizeMatch) {
@@ -418,14 +644,14 @@
           if (alternatives.length > 0) {
             const altHdr = document.createElement("div");
             altHdr.className = "section-divider";
-            altHdr.textContent = `🔄 Аналоги Ø${targetDiam} в наличии и Б/у под цех (${alternatives.length})`;
+            altHdr.textContent = `Аналоги Ø${targetDiam} в наличии и Б/у под цех (${alternatives.length})`;
             list.appendChild(altHdr);
 
             alternatives.forEach(p => {
               const isUsed = (p.condition || '').toLowerCase().includes('б/у');
               let hint = '';
-              if (isUsed) hint = '🛠️ Можно восст.';
-              else if (targetWall && p.wall !== targetWall) hint = `📐 Стенка ${p.wall}`;
+              if (isUsed) hint = 'Можно восст.';
+              else if (targetWall && p.wall !== targetWall) hint = `Стенка ${p.wall}`;
               list.appendChild(createPipeCardElement(p, hint, true));
             });
           }
@@ -442,8 +668,12 @@
       const p = inventory[selectedIdx];
       filterSelect();
 
+      document.getElementById('nomWallReadonly').value = p.wall + ' мм';
+      document.getElementById('actualWallInput').value = p.actualWallHint ? p.actualWallHint : p.wall;
+
       if (currentMode === 'deduct') {
         document.getElementById("dealPriceInput").value = p.priceTn > 0 ? p.priceTn : "";
+        updatePhysicsUI();
         updateMarginPreview();
       } else if (currentMode === 'add') {
         document.getElementById("dealPriceInput").value = p.buyPriceTn > 0 ? p.buyPriceTn : "";
@@ -473,10 +703,10 @@
 
       if (margin < 3000) {
         bar.className = "margin-bar stop";
-        bar.innerHTML = `⛔ Новая себестоимость: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа: ${margin.toLocaleString('ru-RU')} ₽/тн (Ниже Стоп-Лосса!)`;
+        bar.innerHTML = `Новая себестоимость: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа: ${margin.toLocaleString('ru-RU')} ₽/тн (Ниже Стоп-Лосса!)`;
       } else {
         bar.className = "margin-bar ok";
-        bar.innerHTML = `✅ Новая Закупка Восст.: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа при продаже: <strong>+${margin.toLocaleString('ru-RU')} ₽/тн</strong>`;
+        bar.innerHTML = `Новая Закупка Восст.: <strong>${newCost.toLocaleString('ru-RU')} ₽/тн</strong> | Маржа при продаже: <strong>+${margin.toLocaleString('ru-RU')} ₽/тн</strong>`;
       }
     }
 
@@ -494,30 +724,38 @@
       const buyTn = p.buyPriceTn || 0;
       const sellTn = parseFloat(document.getElementById("dealPriceInput").value) || 0;
       const minMargin = p.minMarginPerTon || 3000;
+      const ph = getActiveWeightPhysics_();
+      const ratio = (weightMode === 'actual' && ph) ? ph.ratio : 1;
 
       bar.style.display = 'block';
 
       if (buyTn <= 0) {
         bar.className = 'margin-bar warn';
-        bar.innerHTML = `⚠️ Закупка не указана в колонке G | Продажа: ${sellTn.toLocaleString('ru-RU')} ₽/тн`;
+        bar.innerHTML = `Закупка не указана в колонке G | Продажа: ${sellTn.toLocaleString('ru-RU')} ₽/тн`;
         btnAdd.disabled = false;
         return;
       }
 
-      const diff = sellTn - buyTn;
+      // Приведенная выручка на 1 тн складского металла с учетом фактического веса на весах
+      const effectiveSellPerStockTn = sellTn * ratio;
+      const diff = effectiveSellPerStockTn - buyTn;
       const pct = ((diff / buyTn) * 100).toFixed(1);
+
+      const scaleSuffix = (weightMode === 'actual' && ph && Math.abs(ph.diffPct) > 0.05)
+        ? `<br>Привед. цена на складской вес: <strong>${Math.round(effectiveSellPerStockTn).toLocaleString('ru-RU')} ₽/тн</strong> (учтён недовес ${ph.diffPct.toFixed(1)}%)`
+        : '';
 
       if (diff < minMargin) {
         bar.className = 'margin-bar stop';
         bar.innerHTML =
-          `⛔ <strong>СТОП-ЛОСС!</strong> Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн<br>` +
-          `Маржа: ${diff.toLocaleString('ru-RU')} ₽/тн (${pct}%) — ниже порога ${minMargin.toLocaleString('ru-RU')} ₽/тн!`;
+          `<strong>СТОП-ЛОСС!</strong> Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн${scaleSuffix}<br>` +
+          `Чистая маржа: ${Math.round(diff).toLocaleString('ru-RU')} ₽/тн (${pct}%) — ниже порога ${minMargin.toLocaleString('ru-RU')} ₽/тн!`;
         btnAdd.disabled = true;
       } else {
         bar.className = 'margin-bar ok';
         bar.innerHTML =
-          `✅ Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн | ` +
-          `Маржа: <strong>+${diff.toLocaleString('ru-RU')} ₽/тн (+${pct}%)</strong>`;
+          `Закупка: ${buyTn.toLocaleString('ru-RU')} ₽/тн | ` +
+          `Чистая маржа: <strong>+${Math.round(diff).toLocaleString('ru-RU')} ₽/тн (+${pct}%)</strong>${scaleSuffix}`;
         btnAdd.disabled = false;
       }
     }
@@ -526,7 +764,9 @@
       if (isCreatingNew || selectedIdx === null) return;
       const p = inventory[selectedIdx];
       const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
-      const tn = (m * p.weightPerMeterKg) / 1000;
+      const ph = getActiveWeightPhysics_();
+      const kgPerM = (currentMode === 'deduct' && weightMode === 'actual' && ph) ? ph.actKgM : p.weightPerMeterKg;
+      const tn = (m * kgPerM) / 1000;
       document.getElementById("tonsInput").value = tn > 0 ? tn.toFixed(3) : "";
     }
 
@@ -534,23 +774,25 @@
       if (isCreatingNew || selectedIdx === null) return;
       const p = inventory[selectedIdx];
       const tn = Math.max(0, parseFloat(document.getElementById("tonsInput").value) || 0);
-      const m = p.weightPerMeterKg > 0 ? (tn * 1000) / p.weightPerMeterKg : 0;
+      const ph = getActiveWeightPhysics_();
+      const kgPerM = (currentMode === 'deduct' && weightMode === 'actual' && ph) ? ph.actKgM : p.weightPerMeterKg;
+      const m = kgPerM > 0 ? (tn * 1000) / kgPerM : 0;
       document.getElementById("metersInput").value = m > 0 ? m.toFixed(1) : "";
     }
 
     function getTruckRecommendation(tons) {
-      if (tons <= 0) return "🚛 Транспорт: уточняется";
-      if (tons <= 1.5) return "🚐 До 1.5 тн: Газель (открытый борт) / Догруз";
-      if (tons <= 5) return "🚚 До 5 тн: Валдай / 5-тонник (или Догруз)";
-      if (tons <= 10) return "🚛 До 10 тн: Камаз-одиночка / 10-тонник";
-      if (tons <= 21.5) return "🚛 10–21.5 тн: Еврофура 20т (открытый верх/бок)";
+      if (tons <= 0) return "Транспорт: уточняется";
+      if (tons <= 1.5) return "До 1.5 тн: Газель (открытый борт) / Догруз";
+      if (tons <= 5) return "До 5 тн: Валдай / 5-тонник (или Догруз)";
+      if (tons <= 10) return "До 10 тн: Камаз-одиночка / 10-тонник";
+      if (tons <= 21.5) return "10–21.5 тн: Еврофура 20т (открытый верх/бок)";
       const trucks = Math.ceil(tons / 20);
-      return `🚛 Свыше 21.5 тн: ~${trucks} еврофуры по 20т`;
+      return `Свыше 21.5 тн: ~${trucks} еврофуры по 20т`;
     }
 
     function addToCart() {
       const tn = Math.max(0, parseFloat(document.getElementById("tonsInput").value) || 0);
-      if (tn <= 0) return alert("⚠️ Введите тоннаж (больше нуля)!");
+      if (tn <= 0) return alert("Введите тоннаж (больше нуля)!");
 
       if (isCreatingNew) {
         const d = document.getElementById("newDiam").value;
@@ -561,7 +803,7 @@
         const buyPr = parseFloat(document.getElementById("newBuyPrice").value) || 0;
         const sellPr = parseFloat(document.getElementById("newSellPrice").value) || 0;
 
-        if (!d || !w) return alert("⚠️ Укажите диаметр и стенку!");
+        if (!d || !w) return alert("Укажите диаметр и стенку!");
 
         cart.push({
           isNew: true,
@@ -575,17 +817,18 @@
           priceTn: sellPr,
           dealPriceTn: sellPr,
           tons: tn,
+          stockTons: tn,
           meters: 0,
           cost: Math.round((buyPr > 0 ? buyPr : sellPr) * tn),
           margin: 0
         });
         toggleNewForm(false);
       } else if (currentMode === 'restore') {
-        if (selectedIdx === null) return alert("⚠️ Выберите трубу Б/у для отправки в восстановление!");
+        if (selectedIdx === null) return alert("Выберите трубу Б/у для отправки в восстановление!");
         const p = inventory[selectedIdx];
         const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
         if (m > p.stockM) {
-          if (!confirm(`⚠️ На складе всего ${p.stockM} м Б/у. Отправить в цех ${m} м?`)) return;
+          if (!confirm(`На складе всего ${p.stockM} м Б/у. Отправить в цех ${m} м?`)) return;
         }
         const baseBuy = parseFloat(document.getElementById("restBaseBuy").value) || 0;
         const srvCost = parseFloat(document.getElementById("restServiceCost").value) || 0;
@@ -601,10 +844,11 @@
           diam: p.diam,
           wall: p.wall,
           category: tCat,
-          condition: 'Б/у ➔ Восст.',
+          condition: 'Б/у -> Восст.',
           gost: tGost,
           meters: m,
           tons: tn,
+          stockTons: tn,
           baseBuyPriceTn: baseBuy,
           serviceCostTn: srvCost,
           targetCategory: tCat,
@@ -616,25 +860,29 @@
           margin: Math.round((tSell - (baseBuy + srvCost)) * tn)
         });
       } else {
-        if (selectedIdx === null) return alert("⚠️ Выберите трубу!");
+        if (selectedIdx === null) return alert("Выберите трубу!");
         const p = inventory[selectedIdx];
         const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
         const inputPr = parseFloat(document.getElementById("dealPriceInput").value) || 0;
         const dealPriceTn = currentMode === 'deduct' ? (inputPr || p.priceTn) : (inputPr || p.buyPriceTn || p.priceTn);
         const buyPriceTn = currentMode === 'add' ? (inputPr || p.buyPriceTn) : p.buyPriceTn;
 
-        if (currentMode === 'deduct' && buyPriceTn > 0 && (dealPriceTn - buyPriceTn) < (p.minMarginPerTon || 3000)) {
-          return alert(`⛔ СТОП-ЛОСС! Цена (${dealPriceTn} ₽) дает маржу ниже ${p.minMarginPerTon || 3000} ₽/тн!`);
+        const ph = getActiveWeightPhysics_();
+        const isActualMode = (currentMode === 'deduct' && weightMode === 'actual' && ph);
+        const stockTons = (m > 0 && p.weightPerMeterKg > 0) ? ((m * p.weightPerMeterKg) / 1000) : tn;
+
+        const itemCost = Math.round(dealPriceTn * tn);
+        const stockCogs = Math.round(buyPriceTn * stockTons);
+        const itemMargin = (currentMode === 'deduct' && buyPriceTn > 0) ? (itemCost - stockCogs) : 0;
+        const effectiveMarginPerStockTn = stockTons > 0 ? (itemMargin / stockTons) : (dealPriceTn - buyPriceTn);
+
+        if (currentMode === 'deduct' && buyPriceTn > 0 && effectiveMarginPerStockTn < (p.minMarginPerTon || 3000)) {
+          return alert(`СТОП-ЛОСС! Цена (${dealPriceTn} ₽) дает маржу ${Math.round(effectiveMarginPerStockTn)} ₽/тн (ниже порога ${p.minMarginPerTon || 3000} ₽/тн)!`);
         }
 
         if (currentMode === 'deduct' && m > p.stockM) {
-          if (!confirm(`⚠️ На складе всего ${p.stockM} м. Запрошено ${m} м. Списать в минус?`)) return;
+          if (!confirm(`На складе всего ${p.stockM} м. Запрошено ${m} м. Списать в минус?`)) return;
         }
-
-        const itemCost = Math.round(dealPriceTn * tn);
-        const itemMargin = (currentMode === 'deduct' && buyPriceTn > 0)
-          ? Math.round((dealPriceTn - buyPriceTn) * tn)
-          : 0;
 
         cart.push({
           isNew: false,
@@ -642,11 +890,14 @@
           name: p.name,
           diam: p.diam,
           wall: p.wall,
+          actualWall: isActualMode ? ph.actWall : p.wall,
+          weightMode: isActualMode ? 'actual' : 'nominal',
           category: p.category,
           condition: p.condition,
           gost: p.gost,
           meters: m,
           tons: tn,
+          stockTons: stockTons,
           dealPriceTn: dealPriceTn,
           buyPriceTn: buyPriceTn,
           cost: itemCost,
@@ -685,17 +936,22 @@
       container.innerHTML = "";
 
       let totalTn = 0;
+      let totalStockTn = 0;
       let totalSum = 0;
       let totalMarg = 0;
 
       cart.forEach((item, idx) => {
         totalTn += item.tons;
+        totalStockTn += (item.stockTons || item.tons);
         totalSum += item.cost;
         totalMarg += (item.margin || 0);
 
         const div = document.createElement("div");
         div.className = "cart-item";
         const metersText = item.meters > 0 ? `${item.meters.toFixed(1)} м | ` : '';
+        const scaleTag = (item.weightMode === 'actual')
+          ? ` <span style="background:#fef3c7; color:#92400e; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">ВЕСЫ (факт ${item.actualWall} мм)</span>`
+          : '';
         const marginBadge = (currentMode === 'deduct' && item.margin > 0)
           ? ` <span style="color:#166534; font-weight:700;">(Маржа: +${item.margin.toLocaleString('ru-RU')} ₽)</span>`
           : '';
@@ -703,7 +959,7 @@
         div.innerHTML = `
           <span class="del-btn" onclick="removeFromCart(${idx})">✕</span>
           <div style="font-weight:800; color:#0f172a; margin-bottom:2px;">
-            ${item.name} <span style="font-weight:600; color:#64748b;">(${item.condition || item.category})</span>
+            ${item.name} <span style="font-weight:600; color:#64748b;">(${item.condition || item.category})</span>${scaleTag}
           </div>
           <div style="color:#475569;">
             ${metersText}<strong>${item.tons.toFixed(3)} тн</strong> × ${(item.dealPriceTn || 0).toLocaleString('ru-RU')} ₽ = <strong>${item.cost.toLocaleString('ru-RU')} ₽</strong>${marginBadge}
@@ -715,6 +971,14 @@
       document.getElementById("totalTons").innerText = `${totalTn.toFixed(3)} тн`;
       document.getElementById("totalCost").innerText = `${totalSum.toLocaleString('ru-RU')} ₽`;
 
+      const stockRow = document.getElementById("stockTonsRow");
+      if (currentMode === 'deduct' && Math.abs(totalStockTn - totalTn) > 0.005) {
+        stockRow.style.display = "flex";
+        document.getElementById("totalStockTons").innerText = `${totalStockTn.toFixed(3)} тн`;
+      } else {
+        stockRow.style.display = "none";
+      }
+
       const marginRow = document.getElementById("sumMarginRow");
       if (currentMode === 'deduct' && totalMarg > 0) {
         marginRow.style.display = "flex";
@@ -723,7 +987,7 @@
         marginRow.style.display = "none";
       }
 
-      document.getElementById("truckBadge").innerText = getTruckRecommendation(totalTn);
+      document.getElementById("truckBadge").innerText = getTruckRecommendation(totalStockTn);
     }
 
     function copyOffer() {
@@ -741,17 +1005,20 @@
         totalSum += item.cost;
         const mStr = item.meters > 0 ? `${item.meters.toFixed(1)} м / ` : '';
         const gostStr = (item.gost && item.gost !== '—') ? `, ${item.gost}` : '';
+        const weightBasis = (item.weightMode === 'actual')
+          ? ` [приёмка по физическим весам, факт. стенка ${item.actualWall} мм]`
+          : ` [по теоретическому весу ГОСТ]`;
         lines.push(
-          `${i + 1}. ${item.name} (${item.category}, ${item.condition}${gostStr})\n` +
+          `${i + 1}. ${item.name} (${item.category}, ${item.condition}${gostStr})${weightBasis}\n` +
           `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${item.dealPriceTn.toLocaleString('ru-RU')} ₽/тн = ${item.cost.toLocaleString('ru-RU')} ₽`
         );
       });
 
-      const cleanTruck = getTruckRecommendation(totalTn).replace(/^[^\s]+\s*/, '');
+      const cleanTruck = getTruckRecommendation(totalTn);
       lines.push("");
       lines.push(`Общий вес: ${totalTn.toFixed(3)} тн`);
       lines.push(`Итого с НДС 22%: ${totalSum.toLocaleString('ru-RU')} ₽`);
-      lines.push(`Транспорт: ${cleanTruck}`);
+      lines.push(cleanTruck);
       lines.push("Отдел продаж: +7 (906) 588-37-77 (Кирилл)");
 
       const text = lines.join("\n");
@@ -764,7 +1031,7 @@
 
       const btn = document.getElementById("btnCopyOffer");
       const oldText = btn.innerText;
-      btn.innerText = "✅ Скопировано в буфер!";
+      btn.innerText = "Скопировано в буфер!";
       setTimeout(() => { btn.innerText = oldText; }, 2000);
     }
 
@@ -773,7 +1040,7 @@
       const btn = document.getElementById("executeBtn");
       const oldText = btn.innerText;
       btn.disabled = true;
-      btn.innerText = "⏳ Выполняется...";
+      btn.innerText = "Выполняется...";
 
       const onSuccess = function(msg) {
         btn.disabled = false;
@@ -786,7 +1053,7 @@
       const onFailure = function(err) {
         btn.disabled = false;
         btn.innerText = oldText;
-        alert("❌ Ошибка выполнения: " + err.message);
+        alert("Ошибка выполнения: " + err.message);
       };
 
       if (currentMode === 'deduct') {
