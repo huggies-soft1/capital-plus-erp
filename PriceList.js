@@ -935,8 +935,13 @@ function sendBatchProposals(data) {
     const groupedBlocks = groupItemsByConditionOrder_(items);
 
     const sentDiams = Array.from(new Set(items.map(it => safeParseFloat(it.diam)).filter(d => d > 0)));
-    const sentDiamsBrief = (!isFullPrice && sentDiams.length > 0) ? ` (Ø ${sentDiams.slice(0, 5).join(', ')})` : '';
-
+const sentPricesList = items.slice(0, 5).map(it => {
+  const condShort = it.condition ? ` ${it.condition.slice(0, 5)}.` : '';
+  return `${it.diam}х${it.wall}${condShort} — ${it.priceTn}/т`;
+});
+const sentDiamsBrief = (!isFullPrice && items.length <= 5 && sentPricesList.length > 0)
+  ? ` (${sentPricesList.join(', ')})`
+  : ((!isFullPrice && sentDiams.length > 0) ? ` (Ø ${sentDiams.slice(0, 5).join(', ')})` : '');
     let sentCount = 0;
     const errors = [];
 

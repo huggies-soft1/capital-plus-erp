@@ -1,8 +1,17 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.0)
- * Файл: FollowUp.gs — Самостоятельный модуль «Аналитика отношений, Торг 1С и Рассылка Напоминалок»
- * НЕ ДУБЛИРУЕТ прайс-лист (PriceList.gs)! Работает строго по людям, истории 1С и дожиму КП.
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.1)
+ * Файл: FollowUp.js — Самостоятельный модуль «Аналитика отношений, Торг 1С и Рассылка Напоминалок»
+ * Строгий B2B-стиль без эмодзи (100% защита от битых символов при отправке через алиас).
  */
+
+function stripAllEmojisClean_(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    .replace(/[\u2600-\u27BF\uFE00-\uFE0F\u200D\u2300-\u23FF\u2B50\u2B55\u2934\u2935\u25AA-\u25FE]/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
 
 function openFollowUpModal() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -102,24 +111,24 @@ function getFollowUpRelationshipData_(ss) {
         whalesCount++;
       }
 
-      let relationStatus = '🌱 Новый контакт';
+      let relationStatus = 'Новый контакт';
       let needsReminder = false;
       if (statsKp.kpCount > 0 && statsKp.daysSinceKp !== null) {
         if (statsKp.daysSinceKp >= 14) {
-          relationStatus = `🔴 Ждёт дожима (${statsKp.daysSinceKp} дн. после КП)`;
+          relationStatus = `Ждёт дожима (${statsKp.daysSinceKp} дн. после КП)`;
           needsReminder = true;
         } else if (statsKp.daysSinceKp >= 4) {
-          relationStatus = `🟠 Пора напомнить (${statsKp.daysSinceKp} дн. после КП)`;
+          relationStatus = `Пора напомнить (${statsKp.daysSinceKp} дн. после КП)`;
           needsReminder = true;
         } else {
-          relationStatus = `🟢 Свежее КП (${statsKp.daysSinceKp} дн. назад)`;
+          relationStatus = `Свежее КП (${statsKp.daysSinceKp} дн. назад)`;
         }
       } else if (stats1C.has1C) {
         if (stats1C.daysSinceOrder !== null && stats1C.daysSinceOrder > 180) {
-          relationStatus = `🟠 Спящий Кит (посл. УПД ${stats1C.lastOrderDate})`;
+          relationStatus = `Спящий Кит (посл. УПД ${stats1C.lastOrderDate})`;
           needsReminder = true;
         } else {
-          relationStatus = `🏆 Активный Кит 1С (${stats1C.tonsFormatted})`;
+          relationStatus = `Активный Кит 1С (${stats1C.tonsFormatted})`;
         }
       }
       if (needsReminder) needReminderCount++;
@@ -151,7 +160,7 @@ function getFollowUpRelationshipData_(ss) {
         need: cleanNeed,
         dossier: cleanDossier,
         deadline: deadlineStr,
-        tactic: tactic,
+        tactic: stripAllEmojisClean_(tactic),
         relationStatus: relationStatus,
         needsReminder: needsReminder,
         stats1C: stats1C,
@@ -216,9 +225,9 @@ function parseFollowUp1CStats_(segP, tonsQ, revR, s1cInfo, now) {
   }
 
   let partnerStatus = 'Действующий контрагент';
-  if (tons >= 50 || segP.includes('Кит') || segP.includes('Крупный')) {
+  if (tons >= 50 || segP.includes('VIP') || segP.includes('A') || segP.includes('Кит') || segP.includes('Крупный')) {
     partnerStatus = 'Приоритетный партнёр';
-  } else if (tons >= 15 || segP.includes('Средний')) {
+  } else if (tons >= 15 || segP.includes('B') || segP.includes('Постоянный') || segP.includes('Средний')) {
     partnerStatus = 'Постоянный партнёр';
   } else if (tons > 0) {
     partnerStatus = 'Партнёр по поставкам';
@@ -262,7 +271,7 @@ function parseFollowUpHistoryStats_(historyRaw, now) {
   const quotedPrices = [];
 
   lines.forEach(line => {
-    if (/📧|💬|📄|Прайс|КП|Напоминание|Напоминалка/i.test(line)) {
+    if (/Прайс|КП|Напоминание|Напоминалка|Мессенджер|PDF/i.test(line)) {
       kpCount++;
       const dm = line.match(/(\d{2})\.(\d{2})\.(\d{4})/);
       if (!lastKpDate && dm) {
@@ -293,7 +302,7 @@ function parseFollowUpHistoryStats_(historyRaw, now) {
     daysSinceKp: daysSinceKp,
     quotedPrices: quotedPrices,
     quotedSummary: quotedPrices.slice(0, 4).join(', '),
-    lastHistoryLine: lines[0] || ''
+    lastHistoryLine: stripAllEmojisClean_(lines[0] || '')
   };
 }
 
@@ -301,12 +310,12 @@ function sendBatchFollowUpEmails(data) {
   try {
     let clients = data.clients || [];
     if (clients.length === 0) {
-      return { success: false, message: 'Выберите хотя бы одного клиента из списка или нажмите «🧪 Тестовая фирма (на себя)»!' };
+      return { success: false, message: 'Выберите хотя бы одного клиента из списка или нажмите «Тестовая фирма (на себя)»!' };
     }
 
     const scenarioKey = String(data.scenarioKey || 'remind_kp').trim();
-    const customMessageText = String(data.customMessageText || '').trim();
-    const customOfferLine = String(data.customOfferLine || '').trim();
+    const customMessageText = stripAllEmojisClean_(data.customMessageText || '');
+    const customOfferLine = stripAllEmojisClean_(data.customOfferLine || '');
     const isDraftOnly = (data.createDraftOnly === true);
     const includeRubles = (data.includeRubles !== false);
     const nextDays = Math.max(1, parseInt(data.nextDays, 10) || 3);
@@ -332,15 +341,16 @@ function sendBatchFollowUpEmails(data) {
       if (!recipientEmails || !recipientEmails.includes('@')) continue;
 
       const isManualOrTest = !client.sheet || client.key === '__TEST_COMPANY__' || Boolean(client.isTestSelf);
-      const clientCompany = client.company && client.company !== 'Партнёр' ? client.company.replace(/^🧪\s*/, '').replace(/\s*\(Тест на себя\)$/, '') : '';
-      const chosenPerson = typeof resolveChosenLprString_ === 'function' ? resolveChosenLprString_(client) : (client.selectedLpr || client.lpr || '');
+      const rawCompName = stripAllEmojisClean_(client.company || '');
+      const clientCompany = rawCompName && rawCompName !== 'Партнёр' ? rawCompName.replace(/\s*\(Тест на себя\)$/i, '').trim() : '';
+      const chosenPerson = stripAllEmojisClean_(typeof resolveChosenLprString_ === 'function' ? resolveChosenLprString_(client) : (client.selectedLpr || client.lpr || ''));
       const clientLprGreeting = chosenPerson ? `, ${chosenPerson}` : '';
 
       const s1c = (clients.length === 1 && customStatsOverride) ? customStatsOverride.stats1C : (client.stats1C || { has1C: false });
       const sKp = (clients.length === 1 && customStatsOverride) ? customStatsOverride.statsKp : (client.statsKp || { kpCount: 0 });
-      const clientNeed = (clients.length === 1 && customStatsOverride && customStatsOverride.need !== undefined) ? customStatsOverride.need : (client.need || '');
+      const clientNeed = stripAllEmojisClean_((clients.length === 1 && customStatsOverride && customStatsOverride.need !== undefined) ? customStatsOverride.need : (client.need || ''));
 
-      const subject = buildRelationshipSubject_(scenarioKey, clientCompany, chosenPerson, s1c, sKp, cIdx);
+      const subject = stripAllEmojisClean_(buildRelationshipSubject_(scenarioKey, clientCompany, chosenPerson, s1c, sKp, cIdx));
 
       const cleanCompanyDisplay = clientCompany
         ? clientCompany
@@ -362,7 +372,7 @@ function sendBatchFollowUpEmails(data) {
       paragraphs.forEach(p => plain.push(p + '\r\n'));
 
       if (s1c && s1c.has1C) {
-        plain.push(`📊 НАША ИСТОРИЯ СОТРУДНИЧЕСТВА (ООО «Капитал-Плюс»):`);
+        plain.push(`НАША ИСТОРИЯ СОТРУДНИЧЕСТВА (ООО «Капитал-Плюс»):`);
         plain.push(`• Статус: ${s1c.partnerStatus || 'Постоянный партнёр'}${s1c.years ? ' (' + s1c.years + ')' : ''}`);
         if (s1c.tonsFormatted) {
           plain.push(`• Суммарный объём отгрузок: ${s1c.tonsFormatted}${s1c.updCount ? ' (' + s1c.updCount + ' партий / УПД)' : ''}${s1c.lastOrderDate ? ', крайняя поставка: ' + s1c.lastOrderDate : ''}`);
@@ -378,13 +388,13 @@ function sendBatchFollowUpEmails(data) {
         plain.push(`• Текущее КП / Потребность в работе: ${[sKp && sKp.lastKpDate ? 'КП от ' + sKp.lastKpDate : '', sKp && sKp.quotedSummary ? sKp.quotedSummary : '', clientNeed ? 'Заявка: ' + clientNeed : ''].filter(Boolean).join(' | ')}`);
       }
       if (customOfferLine) {
-        plain.push(`\r\n🎯 Персональное предложение / Условия торга:\r\n${customOfferLine}`);
+        plain.push(`\r\nПерсональное предложение / Условия торга:\r\n${customOfferLine}`);
       }
 
       plain.push('\r\n----------------------------------------');
       plain.push('• Для наших партнёров: приоритетный резерв на базе в г. Воронеже и индивидуальное согласование цены от объёма.');
       plain.push('• Отдел продаж: +7 (906) 588-37-77 (Кирилл).');
-      const plainBody = plain.join('\r\n');
+      const plainBody = stripAllEmojisClean_(plain.join('\r\n'));
 
       const partnerStatsHtml = buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles);
 
@@ -393,10 +403,10 @@ function sendBatchFollowUpEmails(data) {
         .join('');
 
       const offerBoxHtml = customOfferLine
-        ? `<div style="margin:14px 0;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:8px;font-size:13.5px;color:#0f172a;line-height:1.5;"><b style="color:#b45309;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;display:block;margin-bottom:4px;">🎯 Согласование цены и спец-условия поставки:</b>${customOfferLine.replace(/\n/g, '<br>')}</div>`
+        ? `<div style="margin:14px 0;padding:14px 16px;background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #d97706;border-radius:8px;font-size:13.5px;color:#0f172a;line-height:1.5;"><b style="color:#b45309;text-transform:uppercase;font-size:11px;letter-spacing:0.5px;display:block;margin-bottom:4px;">Согласование цены и спец-условия поставки:</b>${customOfferLine.replace(/\n/g, '<br>')}</div>`
         : '';
 
-      const htmlBody = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>
+      const rawHtmlBody = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><style>
 body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
 @media only screen and (max-width:640px){
 .ow{padding:0!important}
@@ -436,6 +446,8 @@ ${userSignature.html}
 </table>
 </td></tr></table></body></html>`;
 
+      const htmlBody = stripAllEmojisClean_(rawHtmlBody);
+
       const emailOptions = {
         htmlBody: htmlBody,
         name: 'Кирилл Манюхин'
@@ -461,9 +473,9 @@ ${userSignature.html}
             const lprTag = chosenPerson ? ` (для: ${chosenPerson})` : '';
             const offerShort = customOfferLine ? ` [${customOfferLine.slice(0, 45)}]` : '';
             const actLabel = isDraftOnly
-              ? `📝 Черновик Напоминалки${offerShort}${lprTag}`
-              : `🤝 Напоминалка / Дожим${offerShort}${lprTag}`;
-            const tag = `[${actLabel} - ${nowStamp}]`;
+              ? `Черновик Напоминалки${offerShort}${lprTag}`
+              : `Напоминалка / Дожим${offerShort}${lprTag}`;
+            const tag = stripAllEmojisClean_(`[${actLabel} - ${nowStamp}]`);
 
             const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
             targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
@@ -585,7 +597,7 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
     }
 
     return `<div style="margin:14px 0 16px 0;padding:15px 18px;background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0284c7;border-radius:8px;">` +
-      `<div style="font-size:11px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">📊 Сводка нашего сотрудничества и история отгрузок</div>` +
+      `<div style="font-size:11px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">Сводка нашего сотрудничества и история отгрузок</div>` +
       `<table width="100%" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;"><tr>` +
       `<td width="33%" valign="top" style="padding-right:8px;"><div style="font-size:10.5px;color:#64748b;font-weight:600;text-transform:uppercase;">Поставленный объём</div><div style="font-size:16.5px;font-weight:900;color:#0f172a;margin-top:2px;">${col1Val}</div><div style="font-size:11.5px;color:#475569;margin-top:1px;">${col1Sub}</div></td>` +
       `<td class="sc" width="34%" valign="top" style="padding:0 8px;border-left:1px solid #bae6fd;"><div style="font-size:10.5px;color:#64748b;font-weight:600;text-transform:uppercase;">${includeRubles && s1c.revenueFormatted ? 'Объём сделок (с НДС)' : 'Статус партнёра'}</div><div style="font-size:16.5px;font-weight:900;color:#0f172a;margin-top:2px;">${col2Val}</div><div style="font-size:11.5px;color:#475569;margin-top:1px;">${col2Sub}</div></td>` +
@@ -605,7 +617,7 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
   kpRows.push(`<div style="font-size:12px;color:#475569;margin-top:6px;">Готовы оперативно согласовать индивидуальную цену от объёма и зафиксировать резерв на складе в г. Воронеже.</div>`);
 
   return `<div style="margin:14px 0 16px 0;padding:14px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0284c7;border-radius:8px;">` +
-    `<div style="font-size:11px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">🤝 Статус взаимодействия и согласования КП</div>` +
+    `<div style="font-size:11px;font-weight:800;color:#0369a1;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px;">Статус взаимодействия и согласования КП</div>` +
     `${kpRows.join('')}` +
     `</div>`;
 }
@@ -620,7 +632,8 @@ function logFollowUpClientAction(payload) {
     const timeZone = ss.getSpreadsheetTimeZone() || 'Europe/Moscow';
     const nowStamp = Utilities.formatDate(new Date(), timeZone, 'dd.MM.yyyy HH:mm');
     const nextDays = Math.max(1, parseInt(payload.nextDays, 10) || 3);
-    const offerShort = payload.offerLine ? ` [${String(payload.offerLine).slice(0, 45)}]` : '';
+    const cleanOffer = stripAllEmojisClean_(payload.offerLine || '');
+    const offerShort = cleanOffer ? ` [${cleanOffer.slice(0, 45)}]` : '';
 
     let loggedCount = 0;
     payload.clients.forEach(client => {
@@ -631,9 +644,9 @@ function logFollowUpClientAction(payload) {
       const actualRow = typeof resolveClientTargetRowSafe_ === 'function' ? resolveClientTargetRowSafe_(targetSheet, client) : client.row;
       if (actualRow < 2) return;
 
-      const chosenLpr = typeof resolveChosenLprString_ === 'function' ? resolveChosenLprString_(client) : (client.selectedLpr || client.lpr || '');
+      const chosenLpr = stripAllEmojisClean_(typeof resolveChosenLprString_ === 'function' ? resolveChosenLprString_(client) : (client.selectedLpr || client.lpr || ''));
       const lprTag = chosenLpr ? ` (для: ${chosenLpr})` : '';
-      const tag = `[💬 Напоминалка в Мессенджер${offerShort}${lprTag} - ${nowStamp}]`;
+      const tag = `[Напоминалка в Мессенджер${offerShort}${lprTag} - ${nowStamp}]`;
 
       const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
       targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);

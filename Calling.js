@@ -103,12 +103,37 @@ function handleCallingSheetEdit(e, sheet) {
   }
 
   // =================================================================
-  // 2.5 ЖИВАЯ ПОТРЕБНОСТЬ ТРУБЫ (Колонка H / 8)
+  // 2.5 ЖИВАЯ ПОТРЕБНОСТЬ ТРУБЫ (Колонка H / 8) + ЗАЩИТА ОТ ТЕКСТОВЫХ ЗАМЕТОК
   // =================================================================
   if (col === 8) {
     const cell = sheet.getRange(row, col);
     const rawNeed = e.value !== undefined ? String(e.value).trim() : String(cell.getValue() || '').trim();
     const oldNeed = e.oldValue !== undefined ? String(e.oldValue).trim() : '';
+
+    // ЗАЩИТА H: если ввели текст, в котором нет ни одного диаметра трубы (57..1420) и это не "Нет" / "В просчете"
+    const isSpecialStatus = !rawNeed || /^(нет|—|-|в просчете|в просчёте)$/i.test(rawNeed);
+    const foundDiamsInH = rawNeed ? extractCleanPipeDiams_(rawNeed) : [];
+
+    if (!isSpecialStatus && foundDiamsInH.length === 0) {
+      const ss = sheet.getParent();
+      const noteCell = sheet.getRange(row, 11); // K: Примечание
+      const existingK = String(noteCell.getValue() || '').trim();
+      noteCell.setValue(existingK ? `${existingK} | ${rawNeed}` : rawNeed);
+      processRawNoteIntoDossier_(sheet, row);
+
+      const fallbackH = (sheetName === "1. Обзвон (База)") ? "" : "Нет";
+      cell.setNumberFormat('@').setValue(fallbackH).setBackground(null);
+      if (isSheetWithStockMonitor_(sheetName)) {
+        refreshSingleRowTactic_(sheet, row);
+      }
+      ss.toast(
+        `Текст «${rawNeed}» не содержит диаметров трубы и автоматически перенесён в Примечание (K) и Досье (B)!`,
+        "Защита колонки H",
+        5
+      );
+      return;
+    }
+
     const formattedNeed = rawNeed ? formatPipeNeed_(rawNeed) : '';
 
     if (formattedNeed && formattedNeed !== rawNeed) {
@@ -128,12 +153,12 @@ function handleCallingSheetEdit(e, sheet) {
       const snap    = buildNeedSnapshot_(formatPipeNeed_(oldNeed), curType, curApp);
 
       if (snap) {
-        const logLine = `[📋 Снята/закрыта потребность${snap} - ${nowStr}]`;
+        const logLine = `[Снята/закрыта потребность${snap} - ${nowStr}]`;
         sheet.getRange(row, 14).setValue(prependHistoryLog_(curHist, logLine));
       }
       sheet.getRange(row, 9, 1, 2).clearContent();
       sheet.setActiveSelection(cell);
-      ss.toast(`Прежняя заявка (${oldNeed}) сохранена в Историю (N), колонки I и J очищены!`, "📋 Сохранено в Историю", 4);
+      ss.toast(`Прежняя заявка (${oldNeed}) сохранена в Историю (N), колонки I и J очищены!`, "Сохранено в Историю", 4);
     }
 
     updateSingleRowNeedHighlight_(sheet, row, formattedNeed);
@@ -1187,6 +1212,7 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
   const need    = String(rowVals[7] || '').trim();
   const notes   = String(rowVals[10] || '').trim();
   const history = String(rowVals[13] || '').trim();
+  const s1cInfo = rowVals.length >= 19 ? String(rowVals[18] || '').trim() : '';
   const dossier = String(companyDossierNote || '').trim();
 
   const allContext = `${notes} ${dossier} ${history}`;
@@ -1197,15 +1223,15 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
   const firstHistoryLine = (history.split('\n')[0] || '').trim();
 
   const isScaleClient = /весы|взвеш|микрометр|толщиномер|стенкомер|хитро/i.test(allLower);
-  const scaleTag = isScaleClient ? ' [⚖️ Весы]' : '';
+  const scaleTag = isScaleClient ? ' [ВЕСЫ: +10% на допуск]' : '';
 
   // 1. Выставлен счет
   if (firstHistoryLine.includes('💰') || firstHistoryLine.toLowerCase().includes('выставлен счет')) {
     const targetPipe = hasActiveNeed ? `: ${need}` : '';
-    return `💰 Выставлен счет${targetPipe}${scaleTag}`;
+    return `Выставлен счет${targetPipe}${scaleTag}`;
   }
 
-  // 2. Живая заявка в H — сверка со Складом
+  // 2. Живая заявка в H — прямая сверка со Складом
   if (hasActiveNeed) {
     const liveDiams = extractCleanPipeDiams_(need);
     const matches = [];
@@ -1214,22 +1240,68 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     });
 
     if (matches.length > 0) {
-      return `🟢 Под заявку на складе: ${matches.join(' | ')}${scaleTag}`;
+      return `В НАЛИЧИИ ПОД ЗАЯВКУ: ${matches.join(' | ')}${scaleTag}`;
     }
-    return `⚪ Нет на складе (заявка: ${need})${scaleTag}`;
+    return `НЕТ НА СКЛАДЕ (в Закупки: ${need})${scaleTag}`;
   }
 
-  // 3. Если в H пусто или «Нет» — показываем только чистый статус по Прайсу (без свалки прошлых труб в O)
-  // Все исторические трубы лежат в Колонке S (1С) и в Истории (N)
-  const kpSent = /📧|💬|📄|Прайс|КП/i.test(history);
-  return (kpSent ? `✅ Прайс отправлен` : `📧 Прайс не высылался`) + scaleTag;
+  // 3. Если в H стоит «Нет» — радар ревизии: сверка профиля 1С (S) со Складом + возраст Прайса/КП и Напоминалки
+  const statusParts = [];
+
+  if (s1cInfo) {
+    const s1cDiams = extractCleanPipeDiams_(s1cInfo).filter(d => stockByDiam[d]);
+    if (s1cDiams.length > 0) {
+      statusParts.push(`Склад под 1С: Ø ${s1cDiams.slice(0, 4).join(', ')}`);
+    }
+  }
+
+  const lines = history.split('\n').map(l => l.trim()).filter(Boolean);
+  let lastKpDate = '';
+  let daysSinceKp = null;
+  let lastFollowUpDate = '';
+
+  const now = new Date();
+  lines.forEach(l => {
+    if (!lastFollowUpDate && /Напоминалка|Дожим/i.test(l)) {
+      const mRem = l.match(/(\d{2}\.\d{2}\.\d{4})/);
+      if (mRem) lastFollowUpDate = mRem[1];
+    }
+    if (!lastKpDate && /📧|💬|📄|Прайс|КП/i.test(l)) {
+      const mKp = l.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      if (mKp) {
+        lastKpDate = `${mKp[1]}.${mKp[2]}.${mKp[3]}`;
+        const dt = new Date(parseInt(mKp[3], 10), parseInt(mKp[2], 10) - 1, parseInt(mKp[1], 10));
+        if (!isNaN(dt.getTime())) {
+          daysSinceKp = Math.max(0, Math.floor((now.getTime() - dt.getTime()) / 86400000));
+        }
+      }
+    }
+  });
+
+  if (lastKpDate) {
+    const ageLabel = daysSinceKp !== null
+      ? (daysSinceKp > 21 ? `${daysSinceKp} дн. — УСТАРЕЛ` : `${daysSinceKp} дн.`)
+      : '';
+    statusParts.push(`Прайс от ${lastKpDate}${ageLabel ? ' (' + ageLabel + ')' : ''}`);
+  } else if (/📧|💬|📄|Прайс|КП/i.test(history)) {
+    statusParts.push('Прайс отправлен');
+  } else {
+    statusParts.push('ПРАЙС НЕ ВЫСЫЛАЛСЯ');
+  }
+
+  if (lastFollowUpDate) {
+    statusParts.push(`Напоминалка: ${lastFollowUpDate}`);
+  }
+
+  return statusParts.join(' | ') + scaleTag;
 }
 
 function refreshSingleRowTactic_(sheet, row) {
   if (!sheet || !isSheetWithStockMonitor_(sheet.getName()) || row < 2) return;
   if (sheet.getMaxColumns() < 15) return;
-  const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
-  const hasAny = rowVals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
+  const readCols = Math.min(19, Math.max(14, sheet.getMaxColumns()));
+  const rowVals = sheet.getRange(row, 1, 1, readCols).getValues()[0];
+  const hasAny = rowVals.slice(0, 14).some(v => v !== null && v !== undefined && String(v).trim() !== '');
   if (!hasAny) {
     sheet.getRange(row, 15).clearContent().setBackground(null);
     return;

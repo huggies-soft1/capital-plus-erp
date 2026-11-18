@@ -248,7 +248,7 @@
     <div class="partner-card-preview-box">
       <div class="partner-card-top-bar">
         <div class="partner-card-heading">
-          📊 КАРТА ПАРТНЁРСТВА И ИСТОРИЯ СОТРУДНИЧЕСТВА <span id="previewClientTitle" style="color:#0f172a; font-weight:900;">(Выберите клиента)</span>
+          КАРТА ПАРТНЁРСТВА И ИСТОРИЯ СОТРУДНИЧЕСТВА <span id="previewClientTitle" style="color:#0f172a; font-weight:900;">(Выберите клиента)</span>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#0369a1; cursor:pointer;">
@@ -256,10 +256,10 @@
             Показывать сумму сделок в ₽ и средний чек клиенту
           </label>
           <button type="button" class="btn btn-sm btn-test-self" onclick="activateTestCompanySelf()">
-            🧪 Тестовая фирма (на себя)
+            Тестовая фирма (на себя)
           </button>
           <button type="button" class="btn btn-sm btn-draft" onclick="routeSelectedToMyEmail()">
-            🎯 Подставить мою почту
+            Подставить мою почту
           </button>
         </div>
       </div>
@@ -305,13 +305,13 @@
     <div class="scenario-pills-row">
       <span style="font-size:12px; font-weight:800; color:#0f172a; text-transform:uppercase;">Сценарий письма/мессенджера:</span>
       <button type="button" class="scen-pill active" id="scen_remind_kp" onclick="setScenario('remind_kp')">
-        🔔 1. Дожим по отправленному КП (узнать решение / проходную цену)
+        1. Дожим по отправленному КП (узнать решение / проходную цену)
       </button>
       <button type="button" class="scen-pill" id="scen_partner_1c" onclick="setScenario('partner_1c')">
-        🤝 2. Напомнить о себе Киту 1С (итоги работы + планы на сезон)
+        2. Напомнить о себе Киту 1С (итоги работы + планы на сезон)
       </button>
       <button type="button" class="scen-pill" id="scen_bargain_price" onclick="setScenario('bargain_price')">
-        ⚖️ 3. Предложить торг / спец-скидку от объёма
+        3. Предложить торг / спец-скидку от объёма
       </button>
     </div>
 
@@ -324,7 +324,7 @@
       </div>
       <div>
         <div style="font-size:11px; font-weight:700; color:#b45309; text-transform:uppercase; margin-bottom:4px;">
-          🎯 Персональное условие торга / Ценовое предложение (выделится желтой плашкой):
+          Персональное условие торга / Ценовое предложение (выделится желтой плашкой):
         </div>
         <textarea id="inputCustomOffer" class="email-textarea" placeholder="Например: Готовы согласовать спец-цену 58 500 ₽/тн с НДС на 530х8 при бронировании объёма на этой неделе."></textarea>
       </div>
@@ -337,10 +337,10 @@
     <div class="main-action-buttons-row">
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="btn btn-primary-send" id="btnSendProposal" onclick="executeSendFollowUp(false)">
-          📧 Отправить Напоминалку на Email
+          Отправить Напоминалку на Email
         </button>
         <button type="button" class="btn btn-draft" id="btnDraftProposal" onclick="executeSendFollowUp(true)">
-          📝 В черновики Gmail
+          В черновики Gmail
         </button>
         <span style="font-size:12px; color:#475569; font-weight:600; margin-left:6px;">След. контроль (L):</span>
         <select id="selectNextDays" style="padding:6px 10px; border:1px solid #cbd5e1; border-radius:6px; font-weight:700; font-size:12.5px;">
@@ -354,7 +354,7 @@
 
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button type="button" class="btn btn-whatsapp" id="btnCopyText" onclick="copyFollowUpForMessenger()">
-          <span id="btnCopyLabel">💬 Скопировать Напоминалку со статистикой в Мессенджер</span>
+          <span id="btnCopyLabel">Скопировать Напоминалку со статистикой в Мессенджер</span>
         </button>
       </div>
     </div>
@@ -368,7 +368,7 @@
                autocomplete="off">
       </div>
       <button type="button" class="btn btn-draft" onclick="addManualEmailFromInput()">+ Добавить Email</button>
-      <button type="button" class="btn btn-draft" onclick="syncClientFromActiveSheetRow(true)">🔄 Обновить из таблицы</button>
+      <button type="button" class="btn btn-draft" onclick="syncClientFromActiveSheetRow(true)">Обновить из таблицы</button>
     </div>
 
     <div class="client-filter-tabs-row">
@@ -377,16 +377,16 @@
           Все клиенты <span id="cntAll"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="REMIND" onclick="setRelationTab('REMIND', this)">
-          🔥 Пора напомнить / Дожим КП <span id="cntRemind"></span>
+          Пора напомнить / Дожим КП <span id="cntRemind"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="2. Золотой список (Киты)" onclick="setRelationTab('2. Золотой список (Киты)', this)">
-          🏆 Киты 1С <span id="cntWhale"></span>
+          Киты 1С <span id="cntWhale"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="3. Лист ожидания" onclick="setRelationTab('3. Лист ожидания', this)">
-          ⏳ Лист ожидания <span id="cntWait"></span>
+          Лист ожидания <span id="cntWait"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="1. Обзвон (База)" onclick="setRelationTab('1. Обзвон (База)', this)">
-          📞 Обзвон <span id="cntCold"></span>
+          Обзвон <span id="cntCold"></span>
         </button>
 
         <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#475569; margin-left:8px; cursor:pointer;">
@@ -426,7 +426,7 @@
       row: 0,
       isTestSelf: true,
       inn: "3663070544",
-      company: "🧪 ООО «ТехноСтрой-Тест» (Тест на себя)",
+      company: "ООО «ТехноСтрой-Тест» (Тест на себя)",
       city: "г. Воронеж",
       lpr: "Кирилл Борисович",
       lprList: ["Кирилл Борисович"],
@@ -435,7 +435,7 @@
       emailList: ["mail@kapital-p.ru"],
       sphere: "Строительство трубопроводов",
       need: "530х8, 426х9, 219х6",
-      relationStatus: "🟠 Пора напомнить (15 дн. после КП)",
+      relationStatus: "Пора напомнить (15 дн. после КП)",
       needsReminder: true,
       stats1C: {
         has1C: true,
@@ -584,8 +584,7 @@
     function regenerateMessageFromPrimaryClient() {
       var keys = Object.keys(recipientStore);
       var primary = keys.length > 0 ? recipientStore[keys[0]].clientObj : DEMO_TEST_CLIENT;
-      var comp = (primary.company || "").replace(/^🧪\s*/, "").replace(/\s*\(Тест на себя\)$/, "");
-      var s1c = primary.stats1C || {};
+      var comp = (primary.company || "").replace(/\s*\(Тест на себя\)$/, "");
       var sKp = primary.statsKp || {};
       var kpDate = sKp.lastKpDate ? (" от " + sKp.lastKpDate) : "";
       var quoted = sKp.quotedSummary ? (" (" + sKp.quotedSummary + ")") : "";
@@ -607,7 +606,7 @@
     function activateTestCompanySelf() {
       recipientStore = {};
       toggleCompanySelection("__TEST_COMPANY__", true);
-      showToast("🧪 Выбрана тестовая карточка «ООО ТехноСтрой-Тест» с отправкой на ваш Email mail@kapital-p.ru!", "warn");
+      showToast("Выбрана тестовая карточка «ООО ТехноСтрой-Тест» с отправкой на ваш Email mail@kapital-p.ru!", "warn");
     }
 
     function routeSelectedToMyEmail() {
@@ -624,7 +623,7 @@
         syncClientObjFields_(r);
       });
       renderRecipientChips();
-      showToast("🎯 Для выбранного клиента подставлен ваш Email mail@kapital-p.ru!", "warn");
+      showToast("Для выбранного клиента подставлен ваш Email mail@kapital-p.ru!", "warn");
     }
 
     function updatePartnerCardPreviewFromPrimaryClient() {
@@ -761,12 +760,12 @@
           relHtml += '<div style="font-size:11px; color:#0284c7;">КП от ' + sKp.lastKpDate + (sKp.quotedSummary ? ': ' + sKp.quotedSummary : '') + '</div>';
         }
         if (c.emailStr) {
-          relHtml += '<div style="font-size:11px; color:#64748b;">✉️ ' + c.emailStr + '</div>';
+          relHtml += '<div style="font-size:11px; color:#64748b;">Email: ' + c.emailStr + '</div>';
         } else {
           relHtml += '<div style="font-size:11px; color:#dc2626;">нет email (мессенджер: ' + (c.phone || '—') + ')</div>';
         }
 
-        var sheetShort = c.key === "__TEST_COMPANY__" ? "🧪 ТЕСТ" : c.sheet.replace(/^\d+\.\s*/, "");
+        var sheetShort = c.key === "__TEST_COMPANY__" ? "ТЕСТ" : c.sheet.replace(/^\d+\.\s*/, "");
 
         tr.innerHTML =
           '<td style="text-align:center;"><input type="checkbox" class="custom-chk" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleCompanySelection(\'' + c.key + '\')"></td>' +
@@ -1007,7 +1006,7 @@
       if (msgBody) lines.push(msgBody + "\n");
 
       if (s1c.has1C) {
-        lines.push("📊 НАША ИСТОРИЯ СОТРУДНИЧЕСТВА (ООО «Капитал-Плюс»):");
+        lines.push("НАША ИСТОРИЯ СОТРУДНИЧЕСТВА (ООО «Капитал-Плюс»):");
         lines.push("• Статус: " + s1c.partnerStatus + (s1c.years ? " (" + s1c.years + ")" : ""));
         lines.push("• Поставленный объём: " + s1c.tonsFormatted + (s1c.updCount ? " (" + s1c.updCount + " партий / УПД)" : "") + (s1c.lastOrderDate ? ", крайняя отгрузка: " + s1c.lastOrderDate : ""));
         if (includeRubles && s1c.revenueFormatted) {
@@ -1021,7 +1020,7 @@
         lines.push("• Текущее КП / Потребность: " + [sKp.lastKpDate ? "от " + sKp.lastKpDate : "", sKp.quotedSummary].filter(Boolean).join(" — "));
       }
       if (offerLine) {
-        lines.push("\n🎯 Персональное предложение / Условия торга:\n" + offerLine);
+        lines.push("\nПерсональное предложение / Условия торга:\n" + offerLine);
       }
 
       lines.push("\n-----------------------------------");
@@ -1031,8 +1030,8 @@
       copyToClipboardSafe(lines.join("\n"), function() {
         var label = document.getElementById("btnCopyLabel");
         var clients = getActiveClientsPayload_();
-        label.innerText = "✅ Скопировано со статистикой!";
-        showToast("Текст напоминалки со статистикой торга скопирована для мессенджера!", "success");
+        label.innerText = "Скопировано со статистикой!";
+        showToast("Текст напоминалки со статистикой торга скопирован для мессенджера!", "success");
 
         if (clients.length > 0 && typeof google !== "undefined" && google.script && google.script.run) {
           google.script.run.logFollowUpClientAction({
@@ -1041,7 +1040,7 @@
             clients: clients
           });
         }
-        setTimeout(function() { label.innerText = "💬 Скопировать Напоминалку со статистикой в Мессенджер"; }, 2400);
+        setTimeout(function() { label.innerText = "Скопировать Напоминалку со статистикой в Мессенджер"; }, 2400);
       });
     }
 
@@ -1051,7 +1050,7 @@
 
       var clients = getActiveClientsPayload_();
       if (clients.length === 0) {
-        showToast("Выберите клиента галочкой или нажмите «🧪 Тестовая фирма (на себя)»!", "warn");
+        showToast("Выберите клиента галочкой или нажмите «Тестовая фирма (на себя)»!", "warn");
         return;
       }
 
