@@ -1,6 +1,6 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.2)
- * Файл: Main.js — Главное меню (5 базовых листов), утилиты и маршрутизатор триггеров.
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.3)
+ * Файл: Main.js — Чистое главное меню (5 базовых листов), утилиты и маршрутизатор триггеров.
  */
 
 function isWarehouseSheetName_(name) {
@@ -28,9 +28,6 @@ function onOpen() {
     .addSeparator()
     .addItem('Обратный Радар: кому продать этот Ø?', 'openReverseRadarForActivePipe')
     .addItem('Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
-    .addItem('Пробить контрагента по ИНН (Rusprofile / Checko)', 'openInnCheckDialog')
-    .addItem('Сборка Холдинга (объединить юрлица 1 ЛПР)', 'mergeSelectedWhalesIntoHolding')
-    .addItem('Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
     .addSeparator()
     .addItem('Отсортировать склад по диаметрам', 'sortWarehouseData')
     .addItem('Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
