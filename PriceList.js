@@ -177,7 +177,7 @@ function getClientsAndActiveSelection_(ss) {
  */
 function getWarehouseGroupedData_(ss) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад');
+  const sheet = typeof getWarehouseSheet_ === 'function' ? getWarehouseSheet_(ss) : (typeof getSheetByNameSafe === 'function' ? getSheetByNameSafe(ss, 'Склад') : ss.getSheetByName('Склад'));
   if (!sheet) return { error: 'Ошибка: лист «Склад» не найден!' };
 
   const lastRow = sheet.getLastRow();
@@ -555,7 +555,9 @@ function logClientPriceAction(payload) {
     const mode = payload.mode || 'whatsapp';
     const isFull = !!payload.isFullPrice;
     const diams = payload.diams || [];
-    const diamsBrief = (!isFull && diams.length > 0) ? ` (Ø ${diams.slice(0, 5).join(', ')})` : (isFull ? ': Полный' : '');
+    const diamsBrief = (!isFull && payload.pricesBrief)
+      ? ` (${payload.pricesBrief})`
+      : ((!isFull && diams.length > 0) ? ` (Ø ${diams.slice(0, 5).join(', ')})` : (isFull ? ': Полный' : ''));
 
     let loggedCount = 0;
     const loggedNames = [];

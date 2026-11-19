@@ -113,16 +113,21 @@ function getPipesData() {
  * Пакетное списание остатков при отгрузке через калькулятор
  * Поддерживает 2 режима: «По теорет. весу (Номинал)» и «По весам (Факт. стенка)»
  */
+/**
+ * Пакетное списание остатков при отгрузке через калькулятор
+ * Учитывает: теоретический вес, физические весы, пересорт стенки (159х8 -> 159х9) и доставку за рейс
+ */
 function executeBatchDeduction(cartItems) {
   if (!cartItems || cartItems.length === 0) return "Корзина пуста!";
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getWarehouseSheet_(ss);
-  if (!sheet) throw new Error("Лист «5. Склад» («Склад») не найден!");
+  if (!sheet) throw new Error("Лист «Склад» не найден!");
 
   let report = [];
   const now = new Date();
   let totalRevenue = 0;
+  let totalDelivery = 0;
   let totalMargin = 0;
   let hasBuyData = false;
 
@@ -136,20 +141,20 @@ function executeBatchDeduction(cartItems) {
 
     const currentM = safeParseFloat(sheet.getRange(row, 12).getValue()); // L: Остаток м
     const deductM  = safeParseFloat(item.meters);
-    const billableTn = safeParseFloat(item.tons); // Оплачиваемый вес по условиям сделки (номинал или весы)
+    const billableTn = safeParseFloat(item.tons);
     const newM     = Math.max(0, Math.round((currentM - deductM) * 10) / 10);
 
     const diam = safeParseFloat(sheet.getRange(row, 4).getValue()); // D
     const wall = safeParseFloat(sheet.getRange(row, 5).getValue()); // E
     const weightPerMeterTn = ((diam - wall) * wall * 0.0246615) / 1000;
 
-    // Учетный тоннаж, физически уходящий со склада (строго по геометрии склада)
     const stockDeductTn = (deductM > 0 && weightPerMeterTn > 0)
       ? (deductM * weightPerMeterTn)
       : (safeParseFloat(item.stockTons) || billableTn);
 
     const buyPriceTn  = safeParseFloat(sheet.getRange(row, 7).getValue()); // G: Закупка
     const dealPriceTn = safeParseFloat(item.dealPriceTn) || safeParseFloat(sheet.getRange(row, 8).getValue()); // H: Продажа
+    const deliveryCost = safeParseFloat(item.deliveryCost);
 
     const itemRevenue = Math.round(dealPriceTn * billableTn);
     const itemCost    = Math.round(buyPriceTn * stockDeductTn);
@@ -189,22 +194,31 @@ function executeBatchDeduction(cartItems) {
     sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm'); // O: Обновлено
 
     totalRevenue += itemRevenue;
+    totalDelivery += deliveryCost;
+
+    const isRegrade = item.docWall && wall && Number(item.docWall) !== Number(wall);
+    const regradePrefix = isRegrade ? `по докам ${item.docName} (` : '';
+    const regradeSuffix = isRegrade ? `)` : '';
     const weightDetails = (item.weightMode === 'actual' && item.actualWall)
-      ? `-${deductM} м (весы факт ${item.actualWall} мм: ${billableTn.toFixed(3)} тн / склад: ${stockDeductTn.toFixed(3)} тн)`
-      : `-${deductM} м (~${billableTn.toFixed(3)} тн по теорет. весу)`;
+      ? `-${deductM} м (${regradePrefix}весы факт ${item.actualWall} мм: ${billableTn.toFixed(3)} тн / склад: ${stockDeductTn.toFixed(3)} тн${regradeSuffix})`
+      : `-${deductM} м (${regradePrefix}оплата ${billableTn.toFixed(3)} тн / склад ${stockDeductTn.toFixed(3)} тн${regradeSuffix})`;
+    const delivSuffix = deliveryCost > 0 ? ` | Доставка: ${deliveryCost.toLocaleString('ru-RU')} ₽` : '';
 
     if (buyPriceTn > 0) {
       hasBuyData = true;
       totalMargin += itemMargin;
-      report.push(`• ${item.name}: ${weightDetails} | Маржа: +${itemMargin.toLocaleString('ru-RU')} ₽`);
+      report.push(`• ${item.name}: ${weightDetails}${delivSuffix} | Маржа: +${itemMargin.toLocaleString('ru-RU')} ₽`);
     } else {
-      report.push(`• ${item.name}: ${weightDetails}`);
+      report.push(`• ${item.name}: ${weightDetails}${delivSuffix}`);
     }
   });
 
-  let summaryText = `Списано со склада на сумму: ${totalRevenue.toLocaleString('ru-RU')} ₽\n`;
+  let summaryText = `Списано металла на сумму: ${totalRevenue.toLocaleString('ru-RU')} ₽\n`;
+  if (totalDelivery > 0) {
+    summaryText += `Логистика по сделке: ${totalDelivery.toLocaleString('ru-RU')} ₽ (Итого с доставкой: ${(totalRevenue + totalDelivery).toLocaleString('ru-RU')} ₽)\n`;
+  }
   if (hasBuyData) {
-    summaryText += `Чистая маржа со сделки: +${totalMargin.toLocaleString('ru-RU')} ₽\n`;
+    summaryText += `Чистая маржа по металлу: +${totalMargin.toLocaleString('ru-RU')} ₽\n`;
   }
   return summaryText + `\n` + report.join("\n");
 }

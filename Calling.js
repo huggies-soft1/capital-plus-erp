@@ -1168,7 +1168,7 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
 // =================================================================
 
 function getAvailableStockDiamsMap_(ss) {
-  const whSheet = getSheetByNameSafe(ss, 'Склад');
+  const whSheet = typeof getWarehouseSheet_ === 'function' ? getWarehouseSheet_(ss) : getSheetByNameSafe(ss, 'Склад');
   const stockByDiam = {};
   if (!whSheet || whSheet.getLastRow() < 3) return stockByDiam;
 
@@ -2540,7 +2540,7 @@ function openReverseRadarForActivePipe() {
   hotList.sort(sorter);
   profileList.sort(sorter);
 
-  const esc = (s) => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+  const esc = (s) => String(s || '').replace(/&/g, '&' + 'amp;').replace(/</g, '&' + 'lt;').replace(/>/g, '&' + 'gt;');
   const buildRowsHtml = (arr, badgeClass, badgeText) => {
     if (arr.length === 0) return '<tr><td colspan="4" style="padding:10px;color:#64748b;text-align:center;">Совпадений нет</td></tr>';
     return arr.slice(0, 60).map(item => {
@@ -2775,7 +2775,7 @@ function openInnCheckDialog() {
   const queryKey = rawInn || rawComp;
   const encQ = encodeURIComponent(queryKey);
   const encContacts = encodeURIComponent(`${rawComp} ${rawInn} отдел снабжения телефон контакты`.trim());
-  const esc = (s) => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+  const esc = (s) => String(s || '').replace(/&/g, '&' + 'amp;').replace(/</g, '&' + 'lt;').replace(/>/g, '&' + 'gt;');
 
   const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><style>
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;color:#0f172a;}

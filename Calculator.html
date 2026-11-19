@@ -32,7 +32,7 @@
     .tab-btn.active-add { background: #fff; color: var(--success); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .tab-btn.active-restore { background: #fff; color: var(--amber); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-    .pipe-list { max-height: 185px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; padding-right: 3px; }
+    .pipe-list { max-height: 170px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; padding-right: 3px; }
     .section-divider { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; background: #f1f5f9; padding: 5px 8px; border-radius: 5px; margin-top: 4px; }
     .pipe-card { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; background: #fff; transition: all 0.15s ease; user-select: none; }
     .pipe-card:hover { border-color: #94a3b8; background: #f8fafc;}
@@ -46,7 +46,6 @@
     .badge-used { background: #f1f5f9; color: #475569; }
     .badge-hint { background: #fef3c7; color: #92400e; font-size: 9px; padding: 2px 5px; border-radius: 4px; font-weight: 800; }
 
-    /* Блок физики допуска стенки ГОСТ и режима весов */
     .gost-physics-box {
       display: none;
       margin-top: 8px;
@@ -78,66 +77,57 @@
     .wm-btn.active-nom { background: #0f172a; color: #ffffff; }
     .wm-btn.active-act { background: #d97706; color: #ffffff; }
 
-    .gost-presets {
-      display: flex;
-      gap: 4px;
-      margin-top: 5px;
-      flex-wrap: wrap;
-    }
+    .gost-presets { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
     .preset-chip {
-      flex: 1;
-      padding: 4px 4px;
-      font-size: 10px;
-      font-weight: 700;
-      border: 1px solid #cbd5e1;
-      background: #fff;
-      color: #334155;
-      border-radius: 5px;
-      cursor: pointer;
-      text-align: center;
-      white-space: nowrap;
+      flex: 1; padding: 4px 3px; font-size: 9.5px; font-weight: 700;
+      border: 1px solid #cbd5e1; background: #fff; color: #334155;
+      border-radius: 5px; cursor: pointer; text-align: center; white-space: nowrap;
     }
-    .preset-chip:hover { border-color: var(--amber); background: #fffbeb; }
+    .preset-chip:hover { border-color: var(--primary); background: #eff6ff; }
+    .preset-chip.regrade-up { border-color: #86efac; background: #f0fdf4; color: #166534; }
+    .preset-chip.regrade-down { border-color: #fde68a; background: #fffbeb; color: #92400e; }
 
     .physics-info {
-      margin-top: 6px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      font-size: 10.5px;
-      font-weight: 600;
-      line-height: 1.35;
-      background: #eff6ff;
-      color: #1e3a8a;
-      border: 1px solid #bfdbfe;
+      margin-top: 6px; padding: 6px 8px; border-radius: 6px; font-size: 10.5px; font-weight: 600;
+      line-height: 1.35; background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe;
     }
-    .physics-info.warn-scale {
-      background: #fffbeb;
-      color: #92400e;
-      border-color: #fde68a;
-    }
+    .physics-info.bonus-up { background: #dcfce7; color: #166534; border-color: #86efac; }
+    .physics-info.warn-scale { background: #fffbeb; color: #92400e; border-color: #fde68a; }
     .btn-apply-scale-price {
-      width: 100%;
-      margin-top: 5px;
-      padding: 5px 8px;
-      font-size: 10.5px;
-      font-weight: 800;
-      background: #d97706;
-      color: #fff;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
+      width: 100%; margin-top: 5px; padding: 5px 8px; font-size: 10.5px; font-weight: 800;
+      background: #d97706; color: #fff; border: none; border-radius: 5px; cursor: pointer;
     }
     .btn-apply-scale-price:hover { background: #b45309; }
 
-    .margin-bar {
-      display: none;
-      margin-top: 6px;
-      padding: 7px 9px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1.35;
+    .bargain-box {
+      display: none; margin-top: 6px; padding: 8px 9px;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px;
     }
+    .bargain-header {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; font-weight: 800; color: #475569; text-transform: uppercase; margin-bottom: 4px;
+    }
+    .bargain-slider { width: 100%; margin: 4px 0; accent-color: var(--primary); cursor: pointer; }
+    .bargain-steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; margin-top: 4px; }
+    .step-btn {
+      padding: 4px 2px; font-size: 10px; font-weight: 700; border: 1px solid #cbd5e1;
+      background: #ffffff; color: #1e293b; border-radius: 4px; cursor: pointer; text-align: center;
+    }
+    .step-btn:hover { background: #eff6ff; border-color: var(--primary); }
+    .step-btn.stop-btn { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .step-btn.stop-btn:hover { background: #fee2e2; }
+
+    .logistics-box {
+      display: none; margin-top: 8px; padding: 8px 10px;
+      background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px;
+    }
+    .logistics-row { display: grid; grid-template-columns: 1fr 1.15fr; gap: 6px; align-items: center; }
+    .logistics-info {
+      display: none; margin-top: 6px; padding: 6px 8px; border-radius: 6px; font-size: 10.5px;
+      font-weight: 700; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; line-height: 1.35;
+    }
+
+    .margin-bar { display: none; margin-top: 6px; padding: 7px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; line-height: 1.35; }
     .margin-bar.ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
     .margin-bar.warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .margin-bar.stop { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
@@ -177,7 +167,7 @@
   <div class="card">
     <div class="search-box">
       <span class="search-icon">🔍</span>
-      <input type="text" id="pipeSearch" placeholder="Например: 530х8, 630, нефть..." autocomplete="off" onkeyup="filterSelect()">
+      <input type="text" id="pipeSearch" placeholder="Например: 159х8, 530х8, нефть..." autocomplete="off" onkeyup="filterSelect()">
     </div>
 
     <button class="btn btn-new-pipe" id="btnShowNewForm" style="display:none;" onclick="toggleNewForm(true)">+ Создать новую позицию на складе</button>
@@ -235,43 +225,59 @@
       <div style="padding:10px; text-align:center; color:#94a3b8; font-size:12px;">Загрузка склада...</div>
     </div>
 
-    <!-- Блок физики допуска стенки ГОСТ и режима сдачи (Номинал vs Весы) -->
+    <!-- Блок физики допуска стенки ГОСТ, пересорта и весов -->
     <div id="gostPhysicsBox" class="gost-physics-box">
       <div class="weight-mode-switch">
         <button type="button" class="wm-btn active-nom" id="btnWmNominal" onclick="setWeightMode('nominal')">
-          По теорет. весу (Номинал)
+          По теорет. весу доков
         </button>
         <button type="button" class="wm-btn" id="btnWmActual" onclick="setWeightMode('actual')">
-          По весам (Факт. стенка)
+          По физическим весам
         </button>
       </div>
 
-      <div id="actualWallControls" style="display:none; margin-top:6px;">
-        <div class="grid-2" style="align-items:end;">
-          <div>
-            <label style="margin-top:2px;">Номинал (мм):</label>
-            <input type="text" id="nomWallReadonly" readonly style="background:#f1f5f9; color:#64748b;">
-          </div>
-          <div>
-            <label style="margin-top:2px;">Факт. стенка (мм):</label>
-            <input type="number" id="actualWallInput" step="0.1" min="1" placeholder="9.2" oninput="onActualWallChanged()">
-          </div>
+      <div class="grid-2" style="margin-top:6px;">
+        <div>
+          <label style="margin-top:2px;">Стенка в доках / КП (мм):</label>
+          <input type="number" id="docWallInput" step="0.5" min="1" oninput="onWallParamsChanged()">
         </div>
-        <div class="gost-presets">
-          <button type="button" class="preset-chip" onclick="applyGostTolerance(0)">Номинал</button>
-          <button type="button" class="preset-chip" onclick="applyGostTolerance(8)">ГОСТ -8%</button>
-          <button type="button" class="preset-chip" onclick="applyGostTolerance(10)">ГОСТ -10%</button>
-          <button type="button" class="preset-chip" onclick="applyGostTolerance(12.5)">ГОСТ -12.5%</button>
+        <div>
+          <label style="margin-top:2px;">Факт. стенка / замер (мм):</label>
+          <input type="number" id="actualWallInput" step="0.1" min="1" oninput="onWallParamsChanged()">
         </div>
+      </div>
+
+      <div class="gost-presets">
+        <button type="button" class="preset-chip" onclick="resetWallsToStock()">Как склад</button>
+        <button type="button" class="preset-chip regrade-up" onclick="shiftDocWall(1)" title="Например: факт 8 мм, по докам идёт 9 мм">Доки +1 мм</button>
+        <button type="button" class="preset-chip regrade-down" onclick="shiftDocWall(-1)" title="Продажа на понижение: склад 9 мм под заявку 8 мм">Доки -1 мм</button>
+        <button type="button" class="preset-chip" onclick="applyGostTolerance(10)">Факт -10%</button>
+        <button type="button" class="preset-chip" onclick="applyGostTolerance(12.5)">Факт -12.5%</button>
       </div>
 
       <div id="physicsInfoBar" class="physics-info"></div>
     </div>
 
-    <!-- Блок цены сделки (для Отгрузки и Приёмки) -->
+    <!-- Блок цены сделки + Ползунок живого торга -->
     <div id="dealPriceBox">
-      <label id="priceInputLabel" for="dealPriceInput">Цена сделки (₽/тн):</label>
-      <input type="number" id="dealPriceInput" placeholder="Выберите позицию..." oninput="updateMarginPreview()">
+      <label id="priceInputLabel" for="dealPriceInput">Цена трубы (₽/тн, с НДС):</label>
+      <input type="number" id="dealPriceInput" placeholder="Выберите позицию..." oninput="onManualPriceTyped()">
+
+      <div id="bargainBox" class="bargain-box">
+        <div class="bargain-header">
+          <span>Ползунок живого торга</span>
+          <span id="bargainRangeLabel" style="color:#0f172a;">—</span>
+        </div>
+        <input type="range" id="bargainSlider" class="bargain-slider" step="100" oninput="onBargainSliderMoved()">
+        <div class="bargain-steps">
+          <button type="button" class="step-btn stop-btn" onclick="setStopLossPrice()">Стоп-Лосс</button>
+          <button type="button" class="step-btn" onclick="stepDealPrice(-1000)">-1 000</button>
+          <button type="button" class="step-btn" onclick="stepDealPrice(-500)">-500</button>
+          <button type="button" class="step-btn" onclick="stepDealPrice(500)">+500</button>
+          <button type="button" class="step-btn" onclick="stepDealPrice(1000)">+1 000</button>
+        </div>
+      </div>
+
       <div id="marginBar" class="margin-bar"></div>
     </div>
 
@@ -328,7 +334,25 @@
 
     <div class="grid-2">
       <div><label for="metersInput">Длина (м):</label><input type="number" id="metersInput" placeholder="0.0" min="0" step="any" oninput="fromMeters()"></div>
-      <div><label id="tonsInputLabel" for="tonsInput">Вес теор. (тн):</label><input type="number" id="tonsInput" placeholder="0.000" min="0" step="any" oninput="fromTons()"></div>
+      <div><label id="tonsInputLabel" for="tonsInput">Вес по докам (тн):</label><input type="number" id="tonsInput" placeholder="0.000" min="0" step="any" oninput="fromTons()"></div>
+    </div>
+
+    <!-- Калькулятор логистического плеча (Доставка в цену тонны) -->
+    <div id="logisticsBox" class="logistics-box">
+      <div class="logistics-row">
+        <div>
+          <label style="margin-top:0;">Доставка за рейс (₽):</label>
+          <input type="number" id="deliveryTripCost" placeholder="0" min="0" step="500" oninput="updateLogisticsPreview()">
+        </div>
+        <div>
+          <label style="margin-top:0;">Учёт доставки в КП:</label>
+          <select id="deliveryModeSelect" onchange="updateLogisticsPreview()">
+            <option value="baked">Зашить в цену тонны КП</option>
+            <option value="separate">Отдельной строкой в КП</option>
+          </select>
+        </div>
+      </div>
+      <div id="logisticsInfoBar" class="logistics-info"></div>
     </div>
 
     <button class="btn btn-add-to-cart" id="btnAddToCart" onclick="addToCart()">В буфер операций</button>
@@ -344,9 +368,10 @@
 
     <div class="summary-card" id="sumCard">
       <div class="sum-row"><span>Оплачиваемый вес:</span><strong id="totalTons">0 тн</strong></div>
-      <div class="sum-row" id="stockTonsRow" style="display:none; color:#64748b; font-size:11px;"><span>Списание со склада (номинал):</span><strong id="totalStockTons">0 тн</strong></div>
-      <div class="sum-row" id="sumCostRow"><span>Сумма:</span><strong id="totalCost">0 ₽</strong></div>
-      <div class="sum-row" id="sumMarginRow" style="display:none; color:#166534;"><span>Чистая маржа:</span><strong id="totalMargin">+0 ₽</strong></div>
+      <div class="sum-row" id="stockTonsRow" style="display:none; color:#64748b; font-size:11px;"><span>Списание со склада (факт):</span><strong id="totalStockTons">0 тн</strong></div>
+      <div class="sum-row" id="sumDeliveryRow" style="display:none; color:#0369a1; font-size:11.5px;"><span>В т.ч. логистика (рейсы):</span><strong id="totalDelivery">0 ₽</strong></div>
+      <div class="sum-row" id="sumCostRow"><span>Итого для клиента:</span><strong id="totalCost">0 ₽</strong></div>
+      <div class="sum-row" id="sumMarginRow" style="display:none; color:#166534;"><span>Чистая маржа (металл):</span><strong id="totalMargin">+0 ₽</strong></div>
       <div class="truck-tag" id="truckBadge">Транспорт: уточняется</div>
     </div>
 
@@ -358,8 +383,8 @@
     let inventory = [];
     let cart = [];
     let selectedIdx = null;
-    let currentMode = 'deduct'; // 'deduct' | 'add' | 'restore'
-    let weightMode = 'nominal'; // 'nominal' | 'actual'
+    let currentMode = 'deduct';
+    let weightMode = 'nominal';
     let isCreatingNew = false;
 
     window.onload = function() {
@@ -374,68 +399,191 @@
     function getActiveWeightPhysics_() {
       if (selectedIdx === null || !inventory[selectedIdx]) return null;
       const p = inventory[selectedIdx];
-      const nomKgM = calcKgPerMeter_(p.diam, p.wall);
-      const actWallInput = parseFloat(document.getElementById('actualWallInput').value);
-      const actWall = (weightMode === 'actual' && actWallInput > 0 && actWallInput < p.diam) ? actWallInput : p.wall;
+      const stockWall = p.wall;
+      const stockKgM = calcKgPerMeter_(p.diam, stockWall);
+
+      const docWallRaw = parseFloat(document.getElementById('docWallInput').value);
+      const docWall = (docWallRaw > 0 && docWallRaw < p.diam) ? docWallRaw : stockWall;
+      const docKgM = calcKgPerMeter_(p.diam, docWall);
+
+      const actWallRaw = parseFloat(document.getElementById('actualWallInput').value);
+      const actWall = (actWallRaw > 0 && actWallRaw < p.diam) ? actWallRaw : stockWall;
       const actKgM = calcKgPerMeter_(p.diam, actWall);
-      const ratio = nomKgM > 0 ? (actKgM / nomKgM) : 1;
+
+      const billableKgM = (weightMode === 'actual') ? actKgM : docKgM;
+      const ratio = stockKgM > 0 ? (billableKgM / stockKgM) : 1;
       const diffPct = (ratio - 1) * 100;
+
       const baseSell = p.priceTn > 0 ? p.priceTn : (parseFloat(document.getElementById('dealPriceInput').value) || 0);
       const compensatedPriceTn = (ratio > 0 && baseSell > 0) ? Math.ceil(baseSell / ratio) : baseSell;
+      const minMargin = p.minMarginPerTon || 3000;
+      const minStopLossPriceTn = (p.buyPriceTn > 0 && ratio > 0) ? Math.ceil((p.buyPriceTn + minMargin) / ratio) : 0;
+
+      const docTitle = (docWall !== stockWall)
+        ? p.name.replace(/(\d{2,4}\s*[хxX*]\s*)\d+(?:[.,]\d+)?/, `$1${docWall}`)
+        : p.name;
 
       return {
         diam: p.diam,
-        nomWall: p.wall,
+        stockWall: stockWall,
+        docWall: docWall,
         actWall: actWall,
-        nomKgM: nomKgM,
+        docTitle: docTitle,
+        isRegrade: (docWall !== stockWall),
+        stockKgM: stockKgM,
+        docKgM: docKgM,
         actKgM: actKgM,
+        billableKgM: billableKgM,
         ratio: ratio,
         diffPct: diffPct,
-        compensatedPriceTn: compensatedPriceTn
+        compensatedPriceTn: compensatedPriceTn,
+        minStopLossPriceTn: minStopLossPriceTn
       };
+    }
+
+    function syncBargainSliderBounds_() {
+      const box = document.getElementById('bargainBox');
+      if (currentMode !== 'deduct' || isCreatingNew || selectedIdx === null || !inventory[selectedIdx]) {
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'block';
+      const p = inventory[selectedIdx];
+      const ph = getActiveWeightPhysics_();
+      const stopFloor = (ph && ph.minStopLossPriceTn > 0) ? ph.minStopLossPriceTn : Math.max(10000, Math.round((p.priceTn || 50000) * 0.75));
+      const basePrice = Math.max(p.priceTn || 0, stopFloor + 4000);
+      const maxCeil = basePrice + 15000;
+
+      const slider = document.getElementById('bargainSlider');
+      slider.min = stopFloor;
+      slider.max = maxCeil;
+
+      const curVal = parseFloat(document.getElementById('dealPriceInput').value) || basePrice;
+      slider.value = Math.min(maxCeil, Math.max(stopFloor, curVal));
+
+      document.getElementById('bargainRangeLabel').innerText =
+        `от ${stopFloor.toLocaleString('ru-RU')} до ${maxCeil.toLocaleString('ru-RU')} ₽`;
+    }
+
+    function onBargainSliderMoved() {
+      const val = parseFloat(document.getElementById('bargainSlider').value) || 0;
+      document.getElementById('dealPriceInput').value = val;
+      updateMarginPreview();
+      updateLogisticsPreview();
+    }
+
+    function onManualPriceTyped() {
+      syncBargainSliderBounds_();
+      updateMarginPreview();
+      updateLogisticsPreview();
+    }
+
+    function stepDealPrice(delta) {
+      if (selectedIdx === null) return;
+      const inp = document.getElementById('dealPriceInput');
+      const cur = parseFloat(inp.value) || (inventory[selectedIdx].priceTn || 50000);
+      const next = Math.max(1000, cur + delta);
+      inp.value = next;
+      syncBargainSliderBounds_();
+      updateMarginPreview();
+      updateLogisticsPreview();
+    }
+
+    function setStopLossPrice() {
+      const ph = getActiveWeightPhysics_();
+      if (!ph || ph.minStopLossPriceTn <= 0) return;
+      document.getElementById('dealPriceInput').value = ph.minStopLossPriceTn;
+      syncBargainSliderBounds_();
+      updateMarginPreview();
+      updateLogisticsPreview();
+    }
+
+    function updateLogisticsPreview() {
+      const box = document.getElementById('logisticsBox');
+      const info = document.getElementById('logisticsInfoBar');
+      if (currentMode !== 'deduct' || isCreatingNew || selectedIdx === null) {
+        box.style.display = 'none';
+        return;
+      }
+      box.style.display = 'block';
+
+      const tripCost = Math.max(0, parseFloat(document.getElementById('deliveryTripCost').value) || 0);
+      const mode = document.getElementById('deliveryModeSelect').value;
+      const tn = Math.max(0, parseFloat(document.getElementById('tonsInput').value) || 0);
+      const metalPrice = parseFloat(document.getElementById('dealPriceInput').value) || 0;
+
+      if (tripCost <= 0) {
+        info.style.display = 'none';
+        return;
+      }
+
+      info.style.display = 'block';
+      if (tn <= 0) {
+        info.innerText = `Укажите длину или тоннаж выше, чтобы рассчитать доставку ${tripCost.toLocaleString('ru-RU')} ₽ на 1 тн.`;
+        return;
+      }
+
+      const delivPerTn = Math.round(tripCost / tn);
+      if (mode === 'baked') {
+        const clientPrice = metalPrice + delivPerTn;
+        info.innerHTML =
+          `Логистика: +${delivPerTn.toLocaleString('ru-RU')} ₽/тн (${tripCost.toLocaleString('ru-RU')} ₽ ÷ ${tn.toFixed(3)} тн)<br>` +
+          `Цена в КП с доставкой: <strong>${clientPrice.toLocaleString('ru-RU')} ₽/тн</strong>`;
+      } else {
+        info.innerHTML =
+          `Логистика: +${delivPerTn.toLocaleString('ru-RU')} ₽/тн — пойдёт отдельной строкой (${tripCost.toLocaleString('ru-RU')} ₽).`;
+      }
     }
 
     function setWeightMode(mode) {
       weightMode = mode;
       document.getElementById('btnWmNominal').className = 'wm-btn' + (mode === 'nominal' ? ' active-nom' : '');
       document.getElementById('btnWmActual').className = 'wm-btn' + (mode === 'actual' ? ' active-act' : '');
-      document.getElementById('actualWallControls').style.display = (mode === 'actual') ? 'block' : 'none';
-      document.getElementById('tonsInputLabel').innerText = (mode === 'actual') ? 'Вес на весах (тн):' : 'Вес теор. (тн):';
+      document.getElementById('tonsInputLabel').innerText = (mode === 'actual') ? 'Вес на весах (тн):' : 'Вес по докам (тн):';
+      onWallParamsChanged();
+    }
 
-      if (selectedIdx !== null && inventory[selectedIdx]) {
-        const p = inventory[selectedIdx];
-        document.getElementById('nomWallReadonly').value = p.wall + ' мм';
-        const curAct = parseFloat(document.getElementById('actualWallInput').value);
-        if (!curAct || curAct <= 0) {
-          document.getElementById('actualWallInput').value = p.actualWallHint ? p.actualWallHint : p.wall;
-        }
-      }
+    function resetWallsToStock() {
+      if (selectedIdx === null || !inventory[selectedIdx]) return;
+      const p = inventory[selectedIdx];
+      document.getElementById('docWallInput').value = p.wall;
+      document.getElementById('actualWallInput').value = p.actualWallHint ? p.actualWallHint : p.wall;
+      onWallParamsChanged();
+    }
 
-      updatePhysicsUI();
-      if (parseFloat(document.getElementById('metersInput').value) > 0) fromMeters();
-      else if (parseFloat(document.getElementById('tonsInput').value) > 0) fromTons();
-      updateMarginPreview();
+    function shiftDocWall(deltaMm) {
+      if (selectedIdx === null || !inventory[selectedIdx]) return;
+      const p = inventory[selectedIdx];
+      const curDoc = parseFloat(document.getElementById('docWallInput').value) || p.wall;
+      const nextDoc = Math.max(1.5, +(curDoc + deltaMm).toFixed(1));
+      document.getElementById('docWallInput').value = nextDoc;
+      onWallParamsChanged();
     }
 
     function applyGostTolerance(minusPct) {
       if (selectedIdx === null || !inventory[selectedIdx]) return;
-      const p = inventory[selectedIdx];
-      const newWall = +(p.wall * (1 - minusPct / 100)).toFixed(2);
-      document.getElementById('actualWallInput').value = newWall;
-      onActualWallChanged();
+      const docW = parseFloat(document.getElementById('docWallInput').value) || inventory[selectedIdx].wall;
+      const newAct = +(docW * (1 - minusPct / 100)).toFixed(2);
+      document.getElementById('actualWallInput').value = newAct;
+      onWallParamsChanged();
     }
 
-    function onActualWallChanged() {
+    function onWallParamsChanged() {
       updatePhysicsUI();
+      syncBargainSliderBounds_();
       if (parseFloat(document.getElementById('metersInput').value) > 0) fromMeters();
       else if (parseFloat(document.getElementById('tonsInput').value) > 0) fromTons();
       updateMarginPreview();
+      updateLogisticsPreview();
     }
 
     function applyCompensatedScalePrice(priceVal) {
       if (!priceVal || priceVal <= 0) return;
       document.getElementById('dealPriceInput').value = priceVal;
+      syncBargainSliderBounds_();
       updateMarginPreview();
+      updateLogisticsPreview();
     }
 
     function updatePhysicsUI() {
@@ -450,23 +598,37 @@
       const ph = getActiveWeightPhysics_();
       if (!ph) return;
 
+      const diffSign = ph.diffPct > 0 ? '+' : '';
+      const isWeightLoss = ph.diffPct < -0.05;
+      const isWeightBonus = ph.diffPct > 0.05;
+
+      let regradeHeader = '';
+      if (ph.docWall > ph.stockWall) {
+        regradeHeader = `<strong>Пересорт на повышение:</strong> склад <b>${ph.stockWall} мм</b> → в доки/КП <b>${ph.docWall} мм</b><br>`;
+      } else if (ph.docWall < ph.stockWall) {
+        regradeHeader = `<strong>Пересорт на понижение:</strong> склад <b>${ph.stockWall} мм</b> → в доки/КП <b>${ph.docWall} мм</b><br>`;
+      }
+
       if (weightMode === 'nominal') {
-        info.className = 'physics-info';
-        const hintNote = inventory[selectedIdx].actualWallHint
-          ? `<br>В примечании склада указан факт: <b>${inventory[selectedIdx].actualWallHint} мм</b> (допуск ГОСТ закрывается по номиналу).`
+        info.className = 'physics-info' + (isWeightBonus ? ' bonus-up' : (isWeightLoss ? ' warn-scale' : ''));
+        const compBtnHtml = (isWeightLoss && ph.compensatedPriceTn > 0)
+          ? `<button type="button" class="btn-apply-scale-price" onclick="applyCompensatedScalePrice(${ph.compensatedPriceTn})">Компенсировать перерасход: ${ph.compensatedPriceTn.toLocaleString('ru-RU')} ₽/тн (+${Math.round((1 / ph.ratio - 1) * 1000) / 10}%)</button>`
+          : '';
+        const bonusNote = isWeightBonus
+          ? `<br>Весовой бонус по докам: <b>+${ph.diffPct.toFixed(1)}%</b> к марже (оплата по ${ph.docWall} мм, со склада уйдёт ${ph.stockWall} мм).`
           : '';
         info.innerHTML =
-          `Стандарт ГОСТ: 1 п.м. = <b>${ph.nomKgM.toFixed(2)} кг</b> (номинал ${ph.nomWall} мм).` +
-          `<br>Минусовой допуск стенки до -12.5% закрывается по теоретическому весу.${hintNote}`;
+          regradeHeader +
+          `1 п.м.: склад <b>${ph.stockKgM.toFixed(2)} кг</b> | доки (${ph.docWall} мм) <b>${ph.docKgM.toFixed(2)} кг</b> (<b>${diffSign}${ph.diffPct.toFixed(1)}%</b>)` +
+          bonusNote + compBtnHtml;
       } else {
-        const diffSign = ph.diffPct > 0 ? '+' : '';
-        const isMinus = ph.diffPct < -0.05;
-        info.className = 'physics-info' + (isMinus ? ' warn-scale' : '');
-        const compBtnHtml = (isMinus && ph.compensatedPriceTn > 0)
+        info.className = 'physics-info' + (isWeightLoss ? ' warn-scale' : '');
+        const compBtnHtml = (isWeightLoss && ph.compensatedPriceTn > 0)
           ? `<button type="button" class="btn-apply-scale-price" onclick="applyCompensatedScalePrice(${ph.compensatedPriceTn})">Подставить цену под весы: ${ph.compensatedPriceTn.toLocaleString('ru-RU')} ₽/тн (+${Math.round((1 / ph.ratio - 1) * 1000) / 10}%)</button>`
           : '';
         info.innerHTML =
-          `Вес 1 п.м.: ном. <b>${ph.nomKgM.toFixed(2)} кг</b> → факт. <b>${ph.actKgM.toFixed(2)} кг</b> (<b>${diffSign}${ph.diffPct.toFixed(1)}%</b>)` +
+          regradeHeader +
+          `Приёмка по весам (факт ${ph.actWall} мм = <b>${ph.actKgM.toFixed(2)} кг/м</b> против склада <b>${ph.stockKgM.toFixed(2)} кг/м</b>, <b>${diffSign}${ph.diffPct.toFixed(1)}%</b>)` +
           compBtnHtml;
       }
     }
@@ -487,7 +649,7 @@
       if (mode === 'deduct') {
         btnExec.className = 'btn btn-deduct';
         btnExec.innerText = 'Оформить списание';
-        priceLabel.innerText = 'Цена сделки (₽/тн):';
+        priceLabel.innerText = 'Цена трубы (₽/тн, с НДС):';
         dealBox.style.display = 'block';
         restoreBox.style.display = 'none';
         document.getElementById('btnShowNewForm').style.display = 'none';
@@ -501,7 +663,7 @@
         restoreBox.style.display = 'none';
         document.getElementById('btnShowNewForm').style.display = 'block';
         document.getElementById('btnCopyOffer').style.display = 'none';
-        setWeightMode('nominal');
+        weightMode = 'nominal';
       } else if (mode === 'restore') {
         btnExec.className = 'btn btn-restore';
         btnExec.innerText = 'Перевести Б/у -> Восстановленная';
@@ -509,14 +671,16 @@
         restoreBox.style.display = 'block';
         document.getElementById('btnShowNewForm').style.display = 'none';
         document.getElementById('btnCopyOffer').style.display = 'none';
-        setWeightMode('nominal');
+        weightMode = 'nominal';
         toggleNewForm(false);
       }
 
       clearCart();
       filterSelect();
       updatePhysicsUI();
+      syncBargainSliderBounds_();
       updateMarginPreview();
+      updateLogisticsPreview();
     }
 
     function toggleNewForm(show) {
@@ -538,6 +702,8 @@
         document.getElementById("metersInput").placeholder = "0.0";
       }
       updatePhysicsUI();
+      syncBargainSliderBounds_();
+      updateLogisticsPreview();
     }
 
     function loadInventory() {
@@ -644,14 +810,15 @@
           if (alternatives.length > 0) {
             const altHdr = document.createElement("div");
             altHdr.className = "section-divider";
-            altHdr.textContent = `Аналоги Ø${targetDiam} в наличии и Б/у под цех (${alternatives.length})`;
+            altHdr.textContent = `Соседние стенки / аналоги Ø${targetDiam} (${alternatives.length})`;
             list.appendChild(altHdr);
 
             alternatives.forEach(p => {
               const isUsed = (p.condition || '').toLowerCase().includes('б/у');
               let hint = '';
-              if (isUsed) hint = 'Можно восст.';
-              else if (targetWall && p.wall !== targetWall) hint = `Стенка ${p.wall}`;
+              if (targetWall && p.wall < targetWall) hint = `Стенка ${p.wall} (на повыш.)`;
+              else if (targetWall && p.wall > targetWall) hint = `Стенка ${p.wall} (на пониж.)`;
+              else if (isUsed) hint = 'Можно восст.';
               list.appendChild(createPipeCardElement(p, hint, true));
             });
           }
@@ -668,13 +835,25 @@
       const p = inventory[selectedIdx];
       filterSelect();
 
-      document.getElementById('nomWallReadonly').value = p.wall + ' мм';
+      const rawQuery = document.getElementById("pipeSearch").value.toLowerCase().trim().replace(/[x*]/g, 'х');
+      const qMatch = rawQuery.match(/(\d{2,4})\s*х\s*(\d+(?:[.,]\d+)?)/);
+      let initialDocWall = p.wall;
+      if (qMatch && parseFloat(qMatch[1]) === p.diam) {
+        const searchedWall = parseFloat(qMatch[2].replace(',', '.'));
+        if (searchedWall > 0 && Math.abs(searchedWall - p.wall) <= 2.5) {
+          initialDocWall = searchedWall;
+        }
+      }
+
+      document.getElementById('docWallInput').value = initialDocWall;
       document.getElementById('actualWallInput').value = p.actualWallHint ? p.actualWallHint : p.wall;
 
       if (currentMode === 'deduct') {
         document.getElementById("dealPriceInput").value = p.priceTn > 0 ? p.priceTn : "";
         updatePhysicsUI();
+        syncBargainSliderBounds_();
         updateMarginPreview();
+        updateLogisticsPreview();
       } else if (currentMode === 'add') {
         document.getElementById("dealPriceInput").value = p.buyPriceTn > 0 ? p.buyPriceTn : "";
       } else if (currentMode === 'restore') {
@@ -725,7 +904,7 @@
       const sellTn = parseFloat(document.getElementById("dealPriceInput").value) || 0;
       const minMargin = p.minMarginPerTon || 3000;
       const ph = getActiveWeightPhysics_();
-      const ratio = (weightMode === 'actual' && ph) ? ph.ratio : 1;
+      const ratio = ph ? ph.ratio : 1;
 
       bar.style.display = 'block';
 
@@ -736,13 +915,12 @@
         return;
       }
 
-      // Приведенная выручка на 1 тн складского металла с учетом фактического веса на весах
       const effectiveSellPerStockTn = sellTn * ratio;
       const diff = effectiveSellPerStockTn - buyTn;
       const pct = ((diff / buyTn) * 100).toFixed(1);
 
-      const scaleSuffix = (weightMode === 'actual' && ph && Math.abs(ph.diffPct) > 0.05)
-        ? `<br>Привед. цена на складской вес: <strong>${Math.round(effectiveSellPerStockTn).toLocaleString('ru-RU')} ₽/тн</strong> (учтён недовес ${ph.diffPct.toFixed(1)}%)`
+      const scaleSuffix = (ph && Math.abs(ph.diffPct) > 0.05)
+        ? `<br>Привед. цена на складской вес: <strong>${Math.round(effectiveSellPerStockTn).toLocaleString('ru-RU')} ₽/тн</strong> (${ph.diffPct > 0 ? '+' : ''}${ph.diffPct.toFixed(1)}%)`
         : '';
 
       if (diff < minMargin) {
@@ -765,9 +943,10 @@
       const p = inventory[selectedIdx];
       const m = Math.max(0, parseFloat(document.getElementById("metersInput").value) || 0);
       const ph = getActiveWeightPhysics_();
-      const kgPerM = (currentMode === 'deduct' && weightMode === 'actual' && ph) ? ph.actKgM : p.weightPerMeterKg;
+      const kgPerM = (currentMode === 'deduct' && ph) ? ph.billableKgM : p.weightPerMeterKg;
       const tn = (m * kgPerM) / 1000;
       document.getElementById("tonsInput").value = tn > 0 ? tn.toFixed(3) : "";
+      updateLogisticsPreview();
     }
 
     function fromTons() {
@@ -775,9 +954,10 @@
       const p = inventory[selectedIdx];
       const tn = Math.max(0, parseFloat(document.getElementById("tonsInput").value) || 0);
       const ph = getActiveWeightPhysics_();
-      const kgPerM = (currentMode === 'deduct' && weightMode === 'actual' && ph) ? ph.actKgM : p.weightPerMeterKg;
+      const kgPerM = (currentMode === 'deduct' && ph) ? ph.billableKgM : p.weightPerMeterKg;
       const m = kgPerM > 0 ? (tn * 1000) / kgPerM : 0;
       document.getElementById("metersInput").value = m > 0 ? m.toFixed(1) : "";
+      updateLogisticsPreview();
     }
 
     function getTruckRecommendation(tons) {
@@ -808,14 +988,19 @@
         cart.push({
           isNew: true,
           name: `Труба ${d}х${w}`,
+          docName: `Труба ${d}х${w}`,
           diam: parseFloat(d),
           wall: parseFloat(w),
+          docWall: parseFloat(w),
           category: c,
           condition: cond,
           gost: g,
           buyPriceTn: buyPr,
           priceTn: sellPr,
           dealPriceTn: sellPr,
+          clientPriceTn: sellPr,
+          deliveryCost: 0,
+          deliveryBaked: false,
           tons: tn,
           stockTons: tn,
           meters: 0,
@@ -841,8 +1026,10 @@
           isRestore: true,
           rowIndex: p.rowIndex,
           name: p.name,
+          docName: p.name,
           diam: p.diam,
           wall: p.wall,
+          docWall: p.wall,
           category: tCat,
           condition: 'Б/у -> Восст.',
           gost: tGost,
@@ -856,6 +1043,9 @@
           targetSellPriceTn: tSell,
           targetNotes: tNotes,
           dealPriceTn: baseBuy + srvCost,
+          clientPriceTn: baseBuy + srvCost,
+          deliveryCost: 0,
+          deliveryBaked: false,
           cost: Math.round((baseBuy + srvCost) * tn),
           margin: Math.round((tSell - (baseBuy + srvCost)) * tn)
         });
@@ -868,12 +1058,18 @@
         const buyPriceTn = currentMode === 'add' ? (inputPr || p.buyPriceTn) : p.buyPriceTn;
 
         const ph = getActiveWeightPhysics_();
-        const isActualMode = (currentMode === 'deduct' && weightMode === 'actual' && ph);
+        const isActualMode = (currentMode === 'deduct' && weightMode === 'actual');
         const stockTons = (m > 0 && p.weightPerMeterKg > 0) ? ((m * p.weightPerMeterKg) / 1000) : tn;
 
-        const itemCost = Math.round(dealPriceTn * tn);
+        const tripCost = (currentMode === 'deduct') ? Math.max(0, parseFloat(document.getElementById('deliveryTripCost').value) || 0) : 0;
+        const isBaked = (tripCost > 0 && document.getElementById('deliveryModeSelect').value === 'baked');
+        const delivPerTn = (isBaked && tn > 0) ? Math.round(tripCost / tn) : 0;
+        const clientPriceTn = dealPriceTn + delivPerTn;
+
+        const metalRevenue = Math.round(dealPriceTn * tn);
+        const itemCost = isBaked ? Math.round(clientPriceTn * tn) : (metalRevenue + tripCost);
         const stockCogs = Math.round(buyPriceTn * stockTons);
-        const itemMargin = (currentMode === 'deduct' && buyPriceTn > 0) ? (itemCost - stockCogs) : 0;
+        const itemMargin = (currentMode === 'deduct' && buyPriceTn > 0) ? (metalRevenue - stockCogs) : 0;
         const effectiveMarginPerStockTn = stockTons > 0 ? (itemMargin / stockTons) : (dealPriceTn - buyPriceTn);
 
         if (currentMode === 'deduct' && buyPriceTn > 0 && effectiveMarginPerStockTn < (p.minMarginPerTon || 3000)) {
@@ -888,9 +1084,11 @@
           isNew: false,
           rowIndex: p.rowIndex,
           name: p.name,
+          docName: (currentMode === 'deduct' && ph) ? ph.docTitle : p.name,
           diam: p.diam,
           wall: p.wall,
-          actualWall: isActualMode ? ph.actWall : p.wall,
+          docWall: (currentMode === 'deduct' && ph) ? ph.docWall : p.wall,
+          actualWall: (currentMode === 'deduct' && ph) ? ph.actWall : p.wall,
           weightMode: isActualMode ? 'actual' : 'nominal',
           category: p.category,
           condition: p.condition,
@@ -899,6 +1097,9 @@
           tons: tn,
           stockTons: stockTons,
           dealPriceTn: dealPriceTn,
+          clientPriceTn: clientPriceTn,
+          deliveryCost: tripCost,
+          deliveryBaked: isBaked,
           buyPriceTn: buyPriceTn,
           cost: itemCost,
           margin: itemMargin
@@ -907,6 +1108,8 @@
 
       document.getElementById("metersInput").value = "";
       document.getElementById("tonsInput").value = "";
+      document.getElementById("deliveryTripCost").value = "";
+      updateLogisticsPreview();
       renderCart();
     }
 
@@ -937,32 +1140,45 @@
 
       let totalTn = 0;
       let totalStockTn = 0;
+      let totalDelivery = 0;
       let totalSum = 0;
       let totalMarg = 0;
 
       cart.forEach((item, idx) => {
         totalTn += item.tons;
         totalStockTn += (item.stockTons || item.tons);
+        totalDelivery += (item.deliveryCost || 0);
         totalSum += item.cost;
         totalMarg += (item.margin || 0);
 
         const div = document.createElement("div");
         div.className = "cart-item";
         const metersText = item.meters > 0 ? `${item.meters.toFixed(1)} м | ` : '';
+        const regradeTag = (item.docWall && item.wall && item.docWall !== item.wall)
+          ? ` <span style="background:#dcfce7; color:#166534; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">Склад ${item.wall} → Доки ${item.docWall}</span>`
+          : '';
         const scaleTag = (item.weightMode === 'actual')
-          ? ` <span style="background:#fef3c7; color:#92400e; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">ВЕСЫ (факт ${item.actualWall} мм)</span>`
+          ? ` <span style="background:#fef3c7; color:#92400e; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">ВЕСЫ (${item.actualWall} мм)</span>`
+          : '';
+        const delivTag = (item.deliveryCost > 0)
+          ? (item.deliveryBaked
+              ? ` <span style="background:#e0f2fe; color:#0369a1; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">+Дост. в цене</span>`
+              : ` <span style="background:#f1f5f9; color:#334155; padding:1px 4px; border-radius:3px; font-size:10px; font-weight:800;">+Дост. ${item.deliveryCost.toLocaleString('ru-RU')} ₽</span>`)
           : '';
         const marginBadge = (currentMode === 'deduct' && item.margin > 0)
           ? ` <span style="color:#166534; font-weight:700;">(Маржа: +${item.margin.toLocaleString('ru-RU')} ₽)</span>`
           : '';
 
+        const displayTitle = item.docName || item.name;
+        const displayPrice = item.clientPriceTn || item.dealPriceTn || 0;
+
         div.innerHTML = `
           <span class="del-btn" onclick="removeFromCart(${idx})">✕</span>
           <div style="font-weight:800; color:#0f172a; margin-bottom:2px;">
-            ${item.name} <span style="font-weight:600; color:#64748b;">(${item.condition || item.category})</span>${scaleTag}
+            ${displayTitle} <span style="font-weight:600; color:#64748b;">(${item.condition || item.category})</span>${regradeTag}${scaleTag}${delivTag}
           </div>
           <div style="color:#475569;">
-            ${metersText}<strong>${item.tons.toFixed(3)} тн</strong> × ${(item.dealPriceTn || 0).toLocaleString('ru-RU')} ₽ = <strong>${item.cost.toLocaleString('ru-RU')} ₽</strong>${marginBadge}
+            ${metersText}<strong>${item.tons.toFixed(3)} тн</strong> × ${displayPrice.toLocaleString('ru-RU')} ₽ = <strong>${item.cost.toLocaleString('ru-RU')} ₽</strong>${marginBadge}
           </div>
         `;
         container.appendChild(div);
@@ -977,6 +1193,14 @@
         document.getElementById("totalStockTons").innerText = `${totalStockTn.toFixed(3)} тн`;
       } else {
         stockRow.style.display = "none";
+      }
+
+      const delivRow = document.getElementById("sumDeliveryRow");
+      if (currentMode === 'deduct' && totalDelivery > 0) {
+        delivRow.style.display = "flex";
+        document.getElementById("totalDelivery").innerText = `${totalDelivery.toLocaleString('ru-RU')} ₽`;
+      } else {
+        delivRow.style.display = "none";
       }
 
       const marginRow = document.getElementById("sumMarginRow");
@@ -994,6 +1218,9 @@
       if (cart.length === 0) return;
       let totalTn = 0;
       let totalSum = 0;
+      let separateDeliverySum = 0;
+      let hasAnyBakedDelivery = false;
+
       let lines = [
         "КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ (ООО «КАПИТАЛ-ПЛЮС»)",
         "Склад отгрузки: г. Воронеж",
@@ -1003,21 +1230,34 @@
       cart.forEach((item, i) => {
         totalTn += item.tons;
         totalSum += item.cost;
+        if (item.deliveryCost > 0) {
+          if (item.deliveryBaked) hasAnyBakedDelivery = true;
+          else separateDeliverySum += item.deliveryCost;
+        }
+
+        const titleForClient = item.docName || item.name;
         const mStr = item.meters > 0 ? `${item.meters.toFixed(1)} м / ` : '';
         const gostStr = (item.gost && item.gost !== '—') ? `, ${item.gost}` : '';
         const weightBasis = (item.weightMode === 'actual')
           ? ` [приёмка по физическим весам, факт. стенка ${item.actualWall} мм]`
           : ` [по теоретическому весу ГОСТ]`;
+        const priceToQuote = item.clientPriceTn || item.dealPriceTn;
+        const delivNote = item.deliveryBaked ? ' (с учётом доставки)' : '';
+        const lineTotal = item.deliveryBaked ? Math.round(priceToQuote * item.tons) : Math.round(item.dealPriceTn * item.tons);
+
         lines.push(
-          `${i + 1}. ${item.name} (${item.category}, ${item.condition}${gostStr})${weightBasis}\n` +
-          `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${item.dealPriceTn.toLocaleString('ru-RU')} ₽/тн = ${item.cost.toLocaleString('ru-RU')} ₽`
+          `${i + 1}. ${titleForClient} (${item.category}, ${item.condition}${gostStr})${weightBasis}\n` +
+          `   Объем: ${mStr}${item.tons.toFixed(3)} тн × ${priceToQuote.toLocaleString('ru-RU')} ₽/тн${delivNote} = ${lineTotal.toLocaleString('ru-RU')} ₽`
         );
       });
 
       const cleanTruck = getTruckRecommendation(totalTn);
       lines.push("");
       lines.push(`Общий вес: ${totalTn.toFixed(3)} тн`);
-      lines.push(`Итого с НДС 22%: ${totalSum.toLocaleString('ru-RU')} ₽`);
+      if (separateDeliverySum > 0) {
+        lines.push(`Доставка автотранспортом: ${separateDeliverySum.toLocaleString('ru-RU')} ₽`);
+      }
+      lines.push(`Итого с НДС 22%${hasAnyBakedDelivery ? ' (с доставкой)' : ''}: ${totalSum.toLocaleString('ru-RU')} ₽`);
       lines.push(cleanTruck);
       lines.push("Отдел продаж: +7 (906) 588-37-77 (Кирилл)");
 

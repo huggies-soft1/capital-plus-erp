@@ -16,8 +16,8 @@ function addSelectedRowToContacts() {
     return;
   }
 
-  if (sheetName === 'Склад') {
-    ui.alert('Внимание', 'На листе «Склад» находятся трубы! Перейдите на клиентский лист.', ui.ButtonSet.OK);
+  if (typeof isCrmSheetName_ === 'function' ? !isCrmSheetName_(sheetName) : (sheetName === 'Склад' || sheetName === '7. Закупки')) {
+    ui.alert('Внимание', 'Синхронизация контактов работает только на клиентских листах (Обзвон, Ожидание, Киты, Архив).', ui.ButtonSet.OK);
     return;
   }
 
