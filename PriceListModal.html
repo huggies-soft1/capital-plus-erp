@@ -1679,7 +1679,7 @@
       document.getElementById("checkAll").checked = false;
       updateSelectionCount();
     }
-    
+
     function selectPipesForSelectedClients() {
       var clients = getActiveClientsPayload_();
       if (clients.length === 0) {
@@ -1788,6 +1788,7 @@
             mode: "whatsapp",
             isFullPrice: false,
             diams: [diam],
+            pricesBrief: diam + "х" + row.querySelectorAll(".col-center")[1].innerText.trim() + " — " + priceTn + "/т",
             clients: clients
           });
         }

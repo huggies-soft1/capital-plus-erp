@@ -1,21 +1,39 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v6.4)
- * Файл: Main.gs — Главное меню, глобальные утилиты и маршрутизатор триггеров
- * с автоматическим сбросом подсветок и авто-подъемом очереди при обновлении страницы.
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.2)
+ * Файл: Main.js — Главное меню (5 базовых листов), утилиты и маршрутизатор триггеров.
  */
+
+function isWarehouseSheetName_(name) {
+  const clean = String(name || '').toLowerCase().replace(/^\d+\.\s*/, '').trim();
+  return clean === 'склад';
+}
+
+function isCrmSheetName_(name) {
+  const compact = String(name || '').toLowerCase().replace(/\s+/g, '');
+  const targets = [
+    '1.обзвон(база)',
+    '2.золотойсписок(киты)',
+    '3.листожидания',
+    '4.архивлидов'
+  ];
+  return targets.includes(compact);
+}
 
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('📱 Управление')
-    .addItem('⚡ Открыть калькулятор отгрузки', 'openCalculatorSidebar')
-    .addItem('📄 Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
-    .addItem('🤝 Напоминалка и Карта партнёра (HTML / Мессенджер)', 'openFollowUpModal')
+    .createMenu('Управление')
+    .addItem('Открыть калькулятор отгрузки (ГОСТ / Весы / Торг)', 'openCalculatorSidebar')
+    .addItem('Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
+    .addItem('Напоминалка и Карта партнёра (HTML / Мессенджер)', 'openFollowUpModal')
     .addSeparator()
-    .addItem('🎯 Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
-    .addItem('🔍 Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
-    .addItem('🧹 Отсортировать склад по диаметрам', 'sortWarehouseData')
+    .addItem('Обратный Радар: кому продать этот Ø?', 'openReverseRadarForActivePipe')
+    .addItem('Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
+    .addItem('Пробить контрагента по ИНН (Rusprofile / Checko)', 'openInnCheckDialog')
+    .addItem('Сборка Холдинга (объединить юрлица 1 ЛПР)', 'mergeSelectedWhalesIntoHolding')
+    .addItem('Проверить дубли ИНН на листе', 'highlightAllDuplicateInnsManual')
     .addSeparator()
-    .addItem('➕ Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
+    .addItem('Отсортировать склад по диаметрам', 'sortWarehouseData')
+    .addItem('Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
     .addToUi();
 
   try {
@@ -27,7 +45,6 @@ function onOpen() {
     const activeCol = activeRange ? activeSheet.getActiveRange().getColumn() : 1;
 
     const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
-    // Сначала обрабатываем активный лист, чтобы пользователь сразу видел актуальную очередь
     if (activeSheet) {
       const actName = activeSheet.getName().trim();
       const idx = crmSheets.indexOf(actName);
@@ -38,7 +55,6 @@ function onOpen() {
     }
 
     for (let i = 0; i < crmSheets.length; i++) {
-      // Защита от таймаута 30 сек в простом триггере onOpen
       if (Date.now() - startMs > 20000) break;
       const sh = getSheetByNameSafe(ss, crmSheets[i]);
       if (sh) {
@@ -53,7 +69,6 @@ function onOpen() {
       }
     }
 
-    // Возвращаем фокус на ячейку пользователя, если он стоял на активном листе
     if (activeSheet && activeRow >= 1 && activeCol >= 1) {
       const safeRow = Math.min(activeRow, Math.max(1, activeSheet.getMaxRows()));
       const safeCol = Math.min(activeCol, Math.max(1, activeSheet.getMaxColumns()));
@@ -89,7 +104,7 @@ function cleanCompanyName(name) {
     }
   }
 
-  str = str.replace(/^(ООО|ЗАО|ОАО|ПАО|АО|ИП)"/i, '\$1 "');
+  str = str.replace(/^(ООО|ЗАО|ОАО|ПАО|АО|ИП)"/i, '$1 "');
 
   const quotes = (str.match(/"/g) || []).length;
   if (quotes % 2 !== 0 && !str.endsWith('"')) {
@@ -120,7 +135,7 @@ function getSheetByNameSafe(ss, targetName) {
 }
 
 // =================================================================
-// ЕДИНЫЙ ТРИГГЕР ИЗМЕНЕНИЙ (МАРШРУТИТИЗАТОР СОБЫТИЙ)
+// ЕДИНЫЙ ТРИГГЕР ИЗМЕНЕНИЙ (МАРШРУТИЗАТОР СОБЫТИЙ)
 // =================================================================
 
 function onEdit(e) {
@@ -129,15 +144,7 @@ function onEdit(e) {
   const sheet = e.range.getSheet();
   const sheetName = sheet.getName().trim();
 
-  const crmSheets = [
-    "1. Обзвон (База)",
-    "2. Золотой список (Киты)",
-    "3. Лист ожидания",
-    "4.Архив лидов"
-  ];
-
-  if (crmSheets.includes(sheetName)) {
-    // Если выделено несколько ячеек (например, очистка через Delete/Backspace или вставка Ctrl+V)
+  if (isCrmSheetName_(sheetName)) {
     if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
       if (typeof handleMultiCellCrmEdit_ === 'function') {
         handleMultiCellCrmEdit_(e, sheet);
@@ -147,7 +154,7 @@ function onEdit(e) {
     if (typeof handleCallingSheetEdit === 'function') {
       handleCallingSheetEdit(e, sheet);
     }
-  } else if (sheetName === "Склад") {
+  } else if (isWarehouseSheetName_(sheetName)) {
     if (e.range.getNumRows() > 1 || e.range.getNumColumns() > 1) {
       if (typeof handleMultiCellWarehouseEdit_ === 'function') {
         handleMultiCellWarehouseEdit_(e, sheet);
@@ -166,18 +173,17 @@ function onEdit(e) {
 
 function sortWarehouseData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = getSheetByNameSafe(ss, 'Склад');
+  const sheet = typeof getWarehouseSheet_ === 'function' ? getWarehouseSheet_(ss) : getSheetByNameSafe(ss, 'Склад');
   if (!sheet) return;
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 3) return;
 
   const range = sheet.getRange(3, 1, lastRow - 2, 15);
-
   range.sort([
     {column: 4, ascending: true},
     {column: 5, ascending: true}
   ]);
 
-  ss.toast('Трубы выстроены строго по возрастанию диаметра!', '✅ Склад отсортирован', 4);
+  ss.toast('Трубы выстроены строго по возрастанию диаметра!', 'Склад отсортирован', 4);
 }

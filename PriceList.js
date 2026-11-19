@@ -110,6 +110,7 @@ function getClientsAndActiveSelection_(ss) {
 
     const numCols = Math.min(19, lCol);
     const data = sh.getRange(2, 1, lRow - 1, numCols).getValues();
+    const notesB = sh.getRange(2, 2, lRow - 1, 1).getNotes();
     data.forEach((r, idx) => {
       const rowNum  = idx + 2;
       const inn     = String(r[0] || '').trim();
@@ -132,7 +133,8 @@ function getClientsAndActiveSelection_(ss) {
       ));
       const lprList = parseLprList_(lprRaw);
 
-      const combinedContext = `${need} ${notes} ${history} ${s1cInfo}`
+      const dossierB = String((notesB[idx] && notesB[idx][0]) || '').trim();
+      const combinedContext = `${need} ${notes} ${dossierB} ${history} ${s1cInfo}`
         .replace(/\b\d{1,2}[\.\-\/]\d{1,2}[\.\-\/]\d{2,4}\b/g, ' ')
         .replace(/\b\d{1,2}:\d{2}\b/g, ' ');
       const pastDiams = Array.from(new Set((combinedContext.match(/\b\d{2,4}\b/g) || []).map(Number)))

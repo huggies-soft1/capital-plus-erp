@@ -744,6 +744,38 @@ function handleMultiCellCrmEdit_(e, sheet) {
 // 100% АВТОМАТИЧЕСКОЕ ДОСЬЕ КЛИЕНТА (ВВОД В K -> СРАЗУ В ЗАМЕТКУ B + ВЫЖИМКА В K)
 // =================================================================
 
+function extractPermanentTagsFromText_(fullText) {
+  const ctx = String(fullText || '').toLowerCase();
+  const tags = [];
+  if (/весы|взвеш|хитро/i.test(ctx)) tags.push('ВЕСЫ');
+  if (/микрометр|толщиномер|стенкомер|замер стенк/i.test(ctx)) tags.push('МИКРОМЕТР');
+  if (/без\s*ндс|нал\b|наличн|на\s*карту/i.test(ctx)) tags.push('БЕЗ НДС / НАЛ');
+  if (/отсрочк|постоплат/i.test(ctx)) tags.push('ОТСРОЧКА');
+  if (/предоплат|100%/i.test(ctx)) tags.push('ПРЕДОПЛАТА');
+  if (/тендер|госзакуп|44-фз|223-фз/i.test(ctx)) tags.push('ТЕНДЕР');
+  if (/демпинг|террор|дешев/i.test(ctx)) tags.push('ДЕМПИНГ');
+  if (/самовывоз|своя\s*машин/i.test(ctx)) tags.push('САМОВЫВОЗ');
+  if (/доставк|догруз/i.test(ctx)) tags.push('ДОСТАВКА');
+  return tags;
+}
+
+function rebuildDossierNoteWithTags_(rawDossierText) {
+  const cleanBody = String(rawDossierText || '')
+    .replace(/^(?:🗂️\s*)?ДОСЬЕ КЛИЕНТА[^\n]*\n*/i, '')
+    .replace(/^ТЕГИ:\s*\[[^\]]*\]\s*\n*/i, '')
+    .replace(/^─+\s*\n*/i, '')
+    .trim();
+
+  if (!cleanBody) return '';
+
+  const tags = extractPermanentTagsFromText_(cleanBody);
+  const headerLines = ['ДОСЬЕ КЛИЕНТА («КАПИТАЛ-ПЛЮС»)'];
+  if (tags.length > 0) {
+    headerLines.push(`ТЕГИ: [${tags.join(' • ')}]`);
+  }
+  return `${headerLines.join('\n')}\n────────────────────\n${cleanBody}`;
+}
+
 function processRawNoteIntoDossier_(sheet, row, oldVal) {
   const noteCell = sheet.getRange(row, 11);
   const compCell = sheet.getRange(row, 2);
@@ -754,32 +786,33 @@ function processRawNoteIntoDossier_(sheet, row, oldVal) {
   const timeZone = sheet.getParent().getSpreadsheetTimeZone() || "Europe/Moscow";
   const dateStr  = Utilities.formatDate(new Date(), timeZone, "dd.MM.yyyy HH:mm");
 
-  let cleanThought = rawText;
-  if (rawText.startsWith('📌')) {
-    const pipeIdx = rawText.indexOf('|');
-    cleanThought = pipeIdx !== -1 ? rawText.slice(pipeIdx + 1).trim() : rawText.replace(/^📌\s*/, '').trim();
+  let cleanThought = rawText
+    .replace(/^📌\s*(?:\[[^\]]+\]\s*\|\s*)?/, '')
+    .trim();
+
+  const existingBody = existingDossier
+    .replace(/^(?:🗂️\s*)?ДОСЬЕ КЛИЕНТА[^\n]*\n*/i, '')
+    .replace(/^ТЕГИ:\s*\[[^\]]*\]\s*\n*/i, '')
+    .replace(/^─+\s*\n*/i, '')
+    .trim();
+
+  let newBody = existingBody;
+  if (cleanThought && !existingBody.includes(cleanThought)) {
+    const newEntry = `[${dateStr}]:\n${cleanThought}`;
+    newBody = existingBody ? `${newEntry}\n────────────────────\n${existingBody}` : newEntry;
   }
 
-  let updatedDossier = existingDossier;
-  if (cleanThought && !existingDossier.includes(cleanThought)) {
-    const header = existingDossier ? existingDossier + '\n────────────────────\n' : '🗂️ ДОСЬЕ КЛИЕНТА («КАПИТАЛ-ПЛЮС»):\n\n';
-    updatedDossier = `${header}✍️ [${dateStr}]:\n${cleanThought}`;
-    compCell.setNote(updatedDossier);
+  const finalDossier = rebuildDossierNoteWithTags_(newBody);
+  if (finalDossier && finalDossier !== existingDossier) {
+    compCell.setNote(finalDossier);
   }
 
-  const summary = extractSmartSummaryFromNote_(cleanThought || rawText, updatedDossier);
-  if (summary && summary !== rawText) {
-    noteCell.setValue(summary);
-  }
+  // Ячейка K всегда очищается после переноса текста в заметку B
+  noteCell.clearContent();
 }
 
 function extractSmartSummaryFromNote_(latestText, fullDossierText) {
-  const cleanLine = String(latestText || '')
-    .replace(/\n+/g, ' ')
-    .replace(/^📌\s*(?:[^|]+\|\s*)?/, '')
-    .trim();
-  const shortPhrase = cleanLine.length > 95 ? cleanLine.slice(0, 92).trim() + '…' : cleanLine;
-  return shortPhrase ? `📌 ${shortPhrase}` : '';
+  return '';
 }
 
 
@@ -1157,7 +1190,7 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
   for (let i = 0; i < numRows; i++) {
     const rawK = String(kVals[i][0] || '').trim();
     const noteB = String(bNotes[i][0] || '').trim();
-    if (rawK && (!noteB || !rawK.startsWith('📌') || rawK.includes('|'))) {
+    if (rawK) {
       processRawNoteIntoDossier_(sheet, i + 2);
     }
   }
@@ -2719,7 +2752,13 @@ function mergeSelectedWhalesIntoHolding() {
     }
   });
 
-  pVals[10] = extractSmartSummaryFromNote_(mergedK, pDossier);
+  if (mergedK && !pDossier.includes(mergedK)) {
+    pDossier = pDossier ? `${mergedK}\n────────────────────\n${pDossier}` : mergedK;
+  }
+  if (pDossier) {
+    pDossier = rebuildDossierNoteWithTags_(pDossier);
+  }
+  pVals[10] = '';
   pVals[13] = mergedHist;
   pVals[16] = totalTons > 0 ? Number(totalTons.toFixed(2)) : '';
   pVals[17] = totalRev > 0 ? Math.round(totalRev) : '';
