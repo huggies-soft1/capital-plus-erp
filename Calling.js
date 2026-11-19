@@ -5,7 +5,7 @@
  * - Монитор Склада в колонке O (Вариант 1 — только сухие факты остатков и цен Склада) для Ожидания и Китов.
  * - VIP-логика и 2-этажная архитектура для «2. Золотой список (Киты)»:
  *   Этаж 1 (с телефонами) всегда наверху в активной ротации, Этаж 2 (из 1С без телефонов) ниже по году (2026->2015) и выручке.
- * - Колонка S «📦 Что брали в 1С (КП / РЛ)» хранит историю УПД обеих фирм, не засоряя Историю звонков (N) и Примечания (K).
+ * - Колонка S «📦 История отгрузок (КП / РЛ)» хранит историю УПД обеих фирм, не засоряя Историю звонков (N) и Примечания (K).
  * - Быстрый ввод времени в L (14 / 1430 / 14 30) + выпадающий календарь + авто-подъем очереди при обновлении.
  */
 
@@ -1021,7 +1021,7 @@ function ensureWhaleColumnsAndSegments_(sheet) {
   }
 
   const headers = sheet.getRange(1, 16, 1, 4).getValues()[0];
-  const expectedHeaders = ["🏆 Сегмент (A/B/C)", "⚖️ Объем (тн)", "💰 Выручка (₽)", "📦 Что брали в 1С (КП / РЛ)"];
+  const expectedHeaders = ["🏆 Сегмент (A/B/C)", "⚖️ Объем (тн)", "💰 Выручка (₽)", "📦 История отгрузок (КП / РЛ)"];
   const needsHeaderInit = headers.some((h, idx) => String(h || '').trim() !== expectedHeaders[idx]);
 
   if (needsHeaderInit) {
@@ -1055,7 +1055,7 @@ function buildWhale1CHistorySnapshot_(sheet, row) {
   if (tn > 0) parts.push(`${Number(tn.toFixed(2))} тн`);
   if (rev > 0) parts.push(`${Math.round(rev).toLocaleString('ru-RU')} ₽`);
   if (s1c && !s1c.includes("отгрузок по этому ИНН нет")) parts.push(s1c);
-  return parts.length > 0 ? ` | 1С: ${parts.join(' • ')}` : "";
+  return parts.length > 0 ? ` | Отгрузки: ${parts.join(' • ')}` : "";
 }
 
 function recalculateWhaleSegmentsOnSheet_(sheet) {
@@ -1275,7 +1275,7 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
   if (s1cInfo) {
     const s1cDiams = extractCleanPipeDiams_(s1cInfo).filter(d => stockByDiam[d]);
     if (s1cDiams.length > 0) {
-      statusParts.push(`Склад под 1С: Ø ${s1cDiams.slice(0, 4).join(', ')}`);
+      statusParts.push(`Склад под отгрузки: Ø ${s1cDiams.slice(0, 4).join(', ')}`);
     }
   }
 
@@ -2380,7 +2380,7 @@ function openReverseRadarForActivePipe() {
 
       if (diamsS.includes(targetDiam) || diamsPast.includes(targetDiam)) {
         const srcTag = diamsS.includes(targetDiam)
-          ? `1С: ${s1cStr.slice(0, 95)}${s1cStr.length > 95 ? '...' : ''}`
+          ? `Отгрузки: ${s1cStr.slice(0, 95)}${s1cStr.length > 95 ? '...' : ''}`
           : 'Был запрос в Истории (N) / Досье';
         profileList.push({
           sheet: shortSheet, row: rowNum, isWhale, comp, city, lpr, phone, email,
@@ -2441,15 +2441,15 @@ function openReverseRadarForActivePipe() {
       </div>
       <div style="text-align:right;font-size:12px;font-weight:700;">
         Горячих заявок (H): <span style="color:#16a34a;">${hotList.length}</span><br>
-        По профилю 1С / CRM: <span style="color:#0284c7;">${profileList.length}</span>
+        По истории отгрузок / CRM: <span style="color:#0284c7;">${profileList.length}</span>
       </div>
     </div>
     <div class="sec">1-й эшелон: Живые заявки в колонке H (${hotList.length})</div>
-    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">1С / Сегмент</th><th width="32%">Основание</th></tr></thead>
+    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">Отгрузки / Сегмент</th><th width="32%">Основание</th></tr></thead>
     <tbody>${buildRowsHtml(hotList, 'display:inline-block;padding:1px 5px;border-radius:4px;background:#dcfce7;color:#166534;font-weight:700;font-size:10px;', 'ЗАЯВКА H')}</tbody></table>
 
-    <div class="sec">2-й эшелон: Брали Ø ${targetDiam} в 1С или запрашивали ранее (${profileList.length})</div>
-    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">1С / Сегмент</th><th width="32%">Профиль</th></tr></thead>
+    <div class="sec">2-й эшелон: Брали Ø ${targetDiam} в прошлых отгрузках или запрашивали ранее (${profileList.length})</div>
+    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">Отгрузки / Сегмент</th><th width="32%">Профиль</th></tr></thead>
     <tbody>${buildRowsHtml(profileList, 'display:inline-block;padding:1px 5px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:10px;', 'ПРОФИЛЬ')}</tbody></table>
   </body></html>`;
 

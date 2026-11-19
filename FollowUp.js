@@ -128,7 +128,7 @@ function getFollowUpRelationshipData_(ss) {
           relationStatus = `Спящий Кит (посл. УПД ${stats1C.lastOrderDate})`;
           needsReminder = true;
         } else {
-          relationStatus = `Активный Кит 1С (${stats1C.tonsFormatted})`;
+          relationStatus = `Активный партнёр (${stats1C.tonsFormatted})`;
         }
       }
       if (needsReminder) needReminderCount++;
@@ -577,7 +577,7 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
 
   if (has1C) {
     const col1Val = s1c.tonsFormatted || 'В работе';
-    const col1Sub = s1c.updCount ? `${s1c.updCount} партий (УПД)` : 'По данным 1С';
+    const col1Sub = s1c.updCount ? `${s1c.updCount} партий (УПД)` : 'По истории поставок';
 
     const col2Val = (includeRubles && s1c.revenueFormatted) ? s1c.revenueFormatted : (s1c.partnerStatus || 'Постоянный партнёр');
     const col2Sub = (includeRubles && s1c.avgPriceFormatted) ? `Ср. цена: ${s1c.avgPriceFormatted}` : (s1c.years || 'Прямые поставки');
@@ -587,7 +587,7 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
 
     let detailsLines = [];
     if (s1c.pipesPurchased) {
-      detailsLines.push(`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #cbd5e1;font-size:12.5px;color:#1e293b;line-height:1.45;"><b style="color:#0f172a;">Ранее поставлявшиеся позиции (1С):</b> ${s1c.pipesPurchased}</div>`);
+      detailsLines.push(`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #cbd5e1;font-size:12.5px;color:#1e293b;line-height:1.45;"><b style="color:#0f172a;">Ранее поставлявшиеся позиции:</b> ${s1c.pipesPurchased}</div>`);
     }
     if (sKp && sKp.lastKpDate) {
       detailsLines.push(`<div style="margin-top:4px;font-size:12.5px;color:#334155;line-height:1.45;"><b style="color:#0284c7;">Крайнее направленное КП:</b> от ${sKp.lastKpDate}${sKp.quotedSummary ? ' (' + sKp.quotedSummary + ')' : ''}</div>`);

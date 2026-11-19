@@ -327,12 +327,12 @@ function matchSupplyWithDemand() {
     }
     const lines = [];
     if (matched.hot.length > 0) lines.push(matched.hot.join(' | '));
-    if (matched.history1C.length > 0) lines.push('Профиль 1С/CRM: ' + matched.history1C.join(', '));
+    if (matched.history1C.length > 0) lines.push('Профиль отгрузок / CRM: ' + matched.history1C.join(', '));
     outColN.push([lines.join('\n')]);
   });
 
   supplySheet.getRange(2, 14, numRows, 1).setValues(outColN);
-  ss.toast('Мэтчинг «7. Закупки» ↔ Спрос CRM и 1С выполнен!', 'Обратный радар', 5);
+  ss.toast('Мэтчинг «7. Закупки» ↔ Спрос CRM и отгрузок выполнен!', 'Обратный радар', 5);
 }
 
 function handleSupplySheetEdit(e, sheet) {

@@ -222,14 +222,14 @@
 
     <div class="top-warehouse-header">
       <div class="brand-left">
-        <div class="doc-title">АНАЛИТИКА ОТНОШЕНИЙ, ИСТОРИЯ ТОРГА 1С И РАССЫЛКА НАПОМИНАЛОК</div>
+        <div class="doc-title">АНАЛИТИКА ОТНОШЕНИЙ, ИСТОРИЯ ОТГРУЗОК И РАССЫЛКА НАПОМИНАЛОК</div>
         <div class="company-brand">КАПИТАЛ-ПЛЮС • ПУЛЬТ ПАРТНЁРСТВА</div>
         <div class="info-badge">
           <span>Дата: <strong id="headerDateText" style="color:#0f172a;"><?= generatedDate ?></strong></span>
           <span style="color:#cbd5e1;">|</span>
-          <span>Китов 1С: <strong id="hdrWhalesCnt" style="color:#0f172a;">—</strong></span>
+          <span>Партнёров с отгрузками: <strong id="hdrWhalesCnt" style="color:#0f172a;">—</strong></span>
           <span style="color:#cbd5e1;">|</span>
-          <span>Сторговали по 1С: <strong id="hdrTotal1C" style="color:#16a34a;">—</strong></span>
+          <span>Объём отгрузок: <strong id="hdrTotal1C" style="color:#16a34a;">—</strong></span>
           <span style="color:#cbd5e1;">|</span>
           <span>Пора напомнить: <strong id="hdrRemindCnt" style="color:#d97706;">—</strong></span>
         </div>
@@ -266,7 +266,7 @@
 
       <div class="partner-metrics-grid">
         <div class="partner-metric-cell">
-          <div class="partner-metric-label">Сколько сторговали (1С)</div>
+          <div class="partner-metric-label">Объём отгрузок</div>
           <input type="text" id="statTons" class="partner-metric-input" value="48,5 тн">
           <input type="text" id="statUpdCount" class="partner-metric-sub" value="6 партий (УПД)">
         </div>
@@ -292,7 +292,7 @@
 
       <div class="partner-details-row">
         <div class="partner-detail-field">
-          <span style="font-size:11px; font-weight:700; color:#0369a1;">Что клиент брал у нас по 1С (колонка S — уходит в карточку клиенту):</span>
+          <span style="font-size:11px; font-weight:700; color:#0369a1;">История отгрузок (колонка S — уходит в карточку клиенту):</span>
           <input type="text" id="statPipesPurchased" class="partner-detail-input" value="530х8 (22.4 т), 426х9 (16.1 т), 219х6 (10.0 т)">
         </div>
         <div class="partner-detail-field">
@@ -308,7 +308,7 @@
         1. Дожим по отправленному КП (узнать решение / проходную цену)
       </button>
       <button type="button" class="scen-pill" id="scen_partner_1c" onclick="setScenario('partner_1c')">
-        2. Напомнить о себе Киту 1С (итоги работы + планы на сезон)
+        2. Напомнить о себе Киту (итоги работы + планы на сезон)
       </button>
       <button type="button" class="scen-pill" id="scen_bargain_price" onclick="setScenario('bargain_price')">
         3. Предложить торг / спец-скидку от объёма
@@ -380,7 +380,7 @@
           Пора напомнить / Дожим КП <span id="cntRemind"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="2. Золотой список (Киты)" onclick="setRelationTab('2. Золотой список (Киты)', this)">
-          Киты 1С <span id="cntWhale"></span>
+          Киты <span id="cntWhale"></span>
         </button>
         <button type="button" class="sheet-tab-btn" data-tab="3. Лист ожидания" onclick="setRelationTab('3. Лист ожидания', this)">
           Лист ожидания <span id="cntWait"></span>
@@ -408,7 +408,7 @@
             <th style="width: 36px; text-align: center;">✓</th>
             <th style="width: 22%;">Компания / Лист / Город</th>
             <th style="width: 18%;">ЛПР (клик = кому пишем)</th>
-            <th style="width: 16%;">Сколько сторговали в 1С</th>
+            <th style="width: 16%;">Объём отгрузок (Q / R)</th>
             <th style="width: 22%;">Что брали (S) / Потребность (H)</th>
             <th style="width: 22%;">Анализ отношений и КП (N)</th>
           </tr>
@@ -638,7 +638,7 @@
 
       document.getElementById("previewClientTitle").innerText = "— " + (primary.company || "Партнёр") + (keys.length > 1 ? " и ещё " + (keys.length - 1) + " комп." : "");
       document.getElementById("statTons").value = s1c.tonsFormatted || (s1c.has1C ? (s1c.tons + " тн") : "КП в работе");
-      document.getElementById("statUpdCount").value = s1c.updCount ? (s1c.updCount + " партий (УПД)") : (s1c.has1C ? "По данным 1С" : "Согласование КП");
+      document.getElementById("statUpdCount").value = s1c.updCount ? (s1c.updCount + " партий (УПД)") : (s1c.has1C ? "По истории поставок" : "Согласование КП");
       document.getElementById("statRevenue").value = s1c.revenueFormatted || "По запросу";
       document.getElementById("statAvgPrice").value = s1c.avgPriceFormatted ? ("Ср. цена: " + s1c.avgPriceFormatted) : "С НДС 22%";
       document.getElementById("statLastOrder").value = s1c.lastOrderDate || (sKp.lastKpDate || "В работе");
@@ -747,10 +747,10 @@
         var tradeHtml = s1c.has1C
           ? ('<div style="font-weight:800; color:#0f172a;">' + (s1c.tonsFormatted || '') + (s1c.revenueFormatted ? ' • ' + s1c.revenueFormatted : '') + '</div>' +
              '<div style="font-size:11px; color:#64748b;">' + (s1c.updCount ? s1c.updCount + ' УПД' : '') + (s1c.lastOrderDate ? ' • посл. ' + s1c.lastOrderDate : '') + '</div>')
-          : '<span style="color:#94a3b8;">Без отгрузок в 1С</span>';
+          : '<span style="color:#94a3b8;">Без отгрузок</span>';
 
         var pipesAndNeed = [];
-        if (s1c.pipesPurchased) pipesAndNeed.push('<div style="color:#1e293b; font-size:11.5px;"><b>1С:</b> ' + s1c.pipesPurchased.slice(0, 85) + '</div>');
+        if (s1c.pipesPurchased) pipesAndNeed.push('<div style="color:#1e293b; font-size:11.5px;"><b>Отгрузки:</b> ' + s1c.pipesPurchased.slice(0, 85) + '</div>');
         if (c.need) pipesAndNeed.push('<div style="color:#15803d; font-size:11.5px; font-weight:700;">Заявка H: ' + c.need + '</div>');
         if (pipesAndNeed.length === 0) pipesAndNeed.push('<span style="color:#94a3b8;">—</span>');
 
@@ -965,7 +965,7 @@
             }
             renderClientsTable();
             renderRecipientChips();
-            if (showMsg) showToast("Аналитика отношений и 1С обновлена из таблицы", "success");
+            if (showMsg) showToast("Аналитика отношений и отгрузок обновлена из таблицы", "success");
           }
         })
         .getFollowUpRelationshipLive();
