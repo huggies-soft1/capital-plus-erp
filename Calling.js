@@ -2411,3 +2411,394 @@ function autoMigrateAndCleanWhalesV67_(ss, forceRun) {
     8
   );
 }
+// =================================================================
+// ПРОБЕЛ №4: ОБРАТНЫЙ РАДАР («КОМУ ПРОДАТЬ ЭТОТ Ø?»)
+// Ищет покупателей под конкретный диаметр: 1-й эшелон — живая заявка (H),
+// 2-й эшелон — профиль 1С (S) и история (N/K/B), сортировка по выручке VIP (R).
+// =================================================================
+
+function openReverseRadarForActivePipe() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const sheet = ss.getActiveSheet();
+  const sheetName = sheet.getName().trim();
+  const activeRange = sheet.getActiveRange();
+  const row = activeRange ? activeRange.getRow() : 0;
+
+  let targetDiam = 0;
+  let sourceLabel = '';
+
+  const isWh = sheetName.toLowerCase().replace(/^\d+\.\s*/, '').trim() === 'склад';
+  const isSup = sheetName.toLowerCase().replace(/^\d+\.\s*/, '').trim() === 'закупки';
+
+  if (isWh && row >= 3) {
+    const dVal = Math.round(safeParseFloat(sheet.getRange(row, 4).getValue()));
+    const nameVal = String(sheet.getRange(row, 2).getValue() || '').trim();
+    if (dVal > 0) {
+      targetDiam = dVal;
+      sourceLabel = nameVal || (`Ø ${dVal}`);
+    } else if (nameVal) {
+      const diams = extractCleanPipeDiams_(nameVal);
+      if (diams.length > 0) {
+        targetDiam = diams[0];
+        sourceLabel = nameVal;
+      }
+    }
+  } else if (isSup && row >= 2) {
+    const sizeVal = String(sheet.getRange(row, 4).getValue() || '').trim();
+    const diams = extractCleanPipeDiams_(sizeVal);
+    if (diams.length > 0) {
+      targetDiam = diams[0];
+      sourceLabel = `Закупка ${sizeVal}`;
+    }
+  }
+
+  if (!targetDiam) {
+    const resp = ui.prompt(
+      'Обратный Радар: кому продать этот диаметр?',
+      'Введите диаметр трубы в мм (например: 530, 426, 219, 159):',
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (resp.getSelectedButton() !== ui.Button.OK) return;
+    const diams = extractCleanPipeDiams_(resp.getResponseText());
+    if (diams.length === 0) {
+      ui.alert('Не удалось распознать стандартный диаметр трубы (57–1420 мм).');
+      return;
+    }
+    targetDiam = diams[0];
+    sourceLabel = `Ø ${targetDiam} мм`;
+  }
+
+  const hotList = [];
+  const profileList = [];
+  const targetSheets = ['2. Золотой список (Киты)', '3. Лист ожидания', '1. Обзвон (База)'];
+
+  targetSheets.forEach(sName => {
+    const sh = getSheetByNameSafe(ss, sName);
+    if (!sh || sh.getLastRow() < 2) return;
+
+    const lRow = sh.getLastRow();
+    const numCols = Math.min(19, Math.max(14, sh.getLastColumn()));
+    const data = sh.getRange(2, 1, lRow - 1, numCols).getValues();
+    const bNotes = sh.getRange(2, 2, lRow - 1, 1).getNotes();
+    const isWhale = (sName === '2. Золотой список (Киты)');
+    const shortSheet = sName.replace(/^\d+\.\s*/, '');
+
+    data.forEach((r, idx) => {
+      const comp = String(r[1] || '').trim();
+      if (!comp) return;
+
+      const rowNum  = idx + 2;
+      const city    = typeof extractShortCity_ === 'function' ? extractShortCity_(r[2]) : String(r[2] || '').trim();
+      const lpr     = String(r[3] || '').trim().split('\n')[0];
+      const phone   = String(r[4] || '').trim().split('\n')[0];
+      const email   = String(r[5] || '').trim().split(/[\n,;]+/)[0];
+      const needH   = String(r[7] || '').trim();
+      const notesK  = String(r[10] || '').trim();
+      const histN   = String(r[13] || '').trim();
+      const segP    = numCols >= 16 ? String(r[15] || '').trim() : '';
+      const tonsQ   = numCols >= 17 ? parseWhaleMetricNumber_(r[16]) : 0;
+      const revR    = numCols >= 18 ? parseWhaleMetricNumber_(r[17]) : 0;
+      const s1cStr  = numCols >= 19 ? String(r[18] || '').trim() : '';
+      const dossier = String((bNotes[idx] && bNotes[idx][0]) || '').trim();
+
+      const hasActiveNeed = needH && needH.toLowerCase() !== 'нет' && needH !== '—' && needH !== '-';
+      const diamsH = hasActiveNeed ? extractCleanPipeDiams_(needH) : [];
+
+      if (diamsH.includes(targetDiam)) {
+        hotList.push({
+          sheet: shortSheet, row: rowNum, isWhale, comp, city, lpr, phone, email,
+          seg: segP, tons: tonsQ, rev: revR,
+          reason: `Живая заявка (H): ${needH}`
+        });
+        return;
+      }
+
+      if (sName === '1. Обзвон (База)') return;
+
+      const diamsS = s1cStr ? extractCleanPipeDiams_(s1cStr) : [];
+      const diamsPast = extractCleanPipeDiams_(`${histN} ${notesK} ${dossier}`);
+
+      if (diamsS.includes(targetDiam) || diamsPast.includes(targetDiam)) {
+        const srcTag = diamsS.includes(targetDiam)
+          ? `1С: ${s1cStr.slice(0, 95)}${s1cStr.length > 95 ? '...' : ''}`
+          : 'Был запрос в Истории (N) / Досье';
+        profileList.push({
+          sheet: shortSheet, row: rowNum, isWhale, comp, city, lpr, phone, email,
+          seg: segP, tons: tonsQ, rev: revR,
+          reason: srcTag
+        });
+      }
+    });
+  });
+
+  const sorter = (a, b) => {
+    if (a.isWhale !== b.isWhale) return a.isWhale ? -1 : 1;
+    if (a.rev !== b.rev) return b.rev - a.rev;
+    return b.tons - a.tons;
+  };
+  hotList.sort(sorter);
+  profileList.sort(sorter);
+
+  const esc = (s) => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+  const buildRowsHtml = (arr, badgeClass, badgeText) => {
+    if (arr.length === 0) return '<tr><td colspan="4" style="padding:10px;color:#64748b;text-align:center;">Совпадений нет</td></tr>';
+    return arr.slice(0, 60).map(item => {
+      const revStr = item.rev > 0 ? `${Math.round(item.rev).toLocaleString('ru-RU')} ₽` : '—';
+      const tnStr  = item.tons > 0 ? `${Number(item.tons.toFixed(1))} тн` : '';
+      const metrics = [tnStr, revStr !== '—' ? revStr : ''].filter(Boolean).join(' • ') || '—';
+      return `<tr style="border-bottom:1px solid #f1f5f9;">
+        <td style="padding:8px 6px;vertical-align:top;">
+          <div style="font-weight:700;color:#0f172a;">${esc(item.comp)}</div>
+          <div style="font-size:11px;color:#64748b;">${esc(item.sheet)} (стр. ${item.row})${item.city ? ' • ' + esc(item.city) : ''}</div>
+        </td>
+        <td style="padding:8px 6px;vertical-align:top;font-size:12px;">
+          <div style="font-weight:600;color:#1e293b;">${esc(item.lpr || '—')}</div>
+          <div style="color:#0284c7;font-weight:700;">${esc(item.phone || 'нет тел.')}</div>
+          <div style="font-size:11px;color:#64748b;">${esc(item.email)}</div>
+        </td>
+        <td style="padding:8px 6px;vertical-align:top;font-size:12px;white-space:nowrap;">
+          <div style="font-weight:700;color:#0f172a;">${esc(metrics)}</div>
+          <div style="font-size:11px;color:#64748b;">${esc(item.seg.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '').trim())}</div>
+        </td>
+        <td style="padding:8px 6px;vertical-align:top;font-size:11.5px;color:#334155;">
+          <span style="${badgeClass}">${badgeText}</span> ${esc(item.reason)}
+        </td>
+      </tr>`;
+    }).join('');
+  };
+
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;color:#0f172a;font-size:13px;}
+    .hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid #0f172a;}
+    .sec{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px;color:#1e293b;}
+    table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;}
+    th{background:#f1f5f9;padding:8px 6px;text-align:left;font-size:10.5px;text-transform:uppercase;color:#475569;border-bottom:1px solid #cbd5e1;}
+  </style></head><body>
+    <div class="hdr">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#2563eb;text-transform:uppercase;">Обратный Радар • Стакан спроса</div>
+        <div style="font-size:18px;font-weight:900;">Кому продать: ${esc(sourceLabel)} (Ø ${targetDiam} мм)</div>
+      </div>
+      <div style="text-align:right;font-size:12px;font-weight:700;">
+        Горячих заявок (H): <span style="color:#16a34a;">${hotList.length}</span><br>
+        По профилю 1С / CRM: <span style="color:#0284c7;">${profileList.length}</span>
+      </div>
+    </div>
+    <div class="sec">1-й эшелон: Живые заявки в колонке H (${hotList.length})</div>
+    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">1С / Сегмент</th><th width="32%">Основание</th></tr></thead>
+    <tbody>${buildRowsHtml(hotList, 'display:inline-block;padding:1px 5px;border-radius:4px;background:#dcfce7;color:#166534;font-weight:700;font-size:10px;', 'ЗАЯВКА H')}</tbody></table>
+
+    <div class="sec">2-й эшелон: Брали Ø ${targetDiam} в 1С или запрашивали ранее (${profileList.length})</div>
+    <table><thead><tr><th width="26%">Компания</th><th width="24%">Контакт</th><th width="18%">1С / Сегмент</th><th width="32%">Профиль</th></tr></thead>
+    <tbody>${buildRowsHtml(profileList, 'display:inline-block;padding:1px 5px;border-radius:4px;background:#e0f2fe;color:#0369a1;font-weight:700;font-size:10px;', 'ПРОФИЛЬ')}</tbody></table>
+  </body></html>`;
+
+  const dialog = HtmlService.createHtmlOutput(html).setWidth(960).setHeight(700);
+  ui.showModelessDialog(dialog, `Обратный Радар • Ø ${targetDiam} мм`);
+}
+
+// =================================================================
+// ПРОБЕЛ №6: СБОРКА ХОЛДИНГА (ОБЪЕДИНЕНИЕ СМЕЖНЫХ ЮРЛИЦ ОДНОГО ЛПР)
+// Сохраняет 1 валидный ИНН в A, складывает тонны Q и выручку R,
+// фиксирует смежные юрлица/ИНН в S, объединяет контакты и Досье.
+// =================================================================
+
+function mergeSelectedWhalesIntoHolding() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const sheet = ss.getActiveSheet();
+  const sheetName = sheet.getName().trim();
+
+  if (!isWhaleSheetName_(sheetName)) {
+    ui.alert('Сборка Холдинга работает на листе «2. Золотой список (Киты)». Перейдите на него и выделите нужные строки.');
+    return;
+  }
+
+  const rangeList = sheet.getActiveRangeList();
+  const rowSet = new Set();
+  if (rangeList) {
+    rangeList.getRanges().forEach(rng => {
+      const start = rng.getRow();
+      const end = rng.getLastRow();
+      for (let r = start; r <= end; r++) {
+        if (r >= 2) rowSet.add(r);
+      }
+    });
+  }
+
+  let rows = Array.from(rowSet).sort((a, b) => a - b);
+
+  // Если выделена только 1 строка — запрашиваем номер строки-донора
+  if (rows.length === 1) {
+    const baseRow = rows[0];
+    const baseName = String(sheet.getRange(baseRow, 2).getValue() || '').trim();
+    const promptRes = ui.prompt(
+      'Сборка Холдинга (1 ЛПР)',
+      `Основная строка: №${baseRow} (${baseName}).\nВведите номер строки-донора (второго юрлица), которую нужно влить в строку №${baseRow}:`,
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (promptRes.getSelectedButton() !== ui.Button.OK) return;
+    const donorNum = parseInt(promptRes.getResponseText().trim(), 10);
+    if (!donorNum || donorNum < 2 || donorNum === baseRow || donorNum > sheet.getLastRow()) {
+      ui.alert('Указан некорректный номер строки-донора.');
+      return;
+    }
+    rows = [baseRow, donorNum];
+  } else if (rows.length < 2) {
+    ui.alert('Выделите 2 или более строк (можно через Ctrl) на листе «Киты» для объединения в Холдинг.');
+    return;
+  }
+
+  const primaryRow = rows[0];
+  const donorRows = rows.slice(1);
+  const maxCols = Math.max(19, sheet.getLastColumn());
+
+  const pVals = sheet.getRange(primaryRow, 1, 1, maxCols).getValues()[0];
+  let pDossier = String(sheet.getRange(primaryRow, 2).getNote() || '').trim();
+
+  const pInn = String(pVals[0] || '').trim();
+  const pComp = String(pVals[1] || '').trim();
+  const donorNamesPreview = donorRows.map(r => `стр. ${r}: ${sheet.getRange(r, 2).getValue()} (ИНН ${sheet.getRange(r, 1).getValue()})`).join('\n');
+
+  const confirmRes = ui.alert(
+    'Подтверждение Сборки Холдинга',
+    `Основная карточка (останется в базе):\nстр. ${primaryRow}: ${pComp} (ИНН ${pInn})\n\nБудут объединены и удалены:\n${donorNamesPreview}\n\nСуммировать Q (тонны), R (выручку), контакты и историю в основную карточку?`,
+    ui.ButtonSet.YES_NO
+  );
+  if (confirmRes !== ui.Button.YES) return;
+
+  const timeZone = ss.getSpreadsheetTimeZone() || 'Europe/Moscow';
+  const nowStr = Utilities.formatDate(new Date(), timeZone, 'dd.MM.yyyy HH:mm');
+
+  let totalTons = parseWhaleMetricNumber_(pVals[16]);
+  let totalRev  = parseWhaleMetricNumber_(pVals[17]);
+  let mergedS1C = String(pVals[18] || '').trim();
+  let mergedHist = String(pVals[13] || '').trim();
+  let mergedK    = String(pVals[10] || '').trim();
+
+  donorRows.forEach(dRow => {
+    const dVals = sheet.getRange(dRow, 1, 1, maxCols).getValues()[0];
+    const dDossier = String(sheet.getRange(dRow, 2).getNote() || '').trim();
+
+    const dInn  = String(dVals[0] || '').replace(/\D/g, '');
+    const dComp = String(dVals[1] || '').trim();
+    const dTons = parseWhaleMetricNumber_(dVals[16]);
+    const dRev  = parseWhaleMetricNumber_(dVals[17]);
+    const dS1c  = String(dVals[18] || '').trim();
+
+    pVals[2] = pVals[2] || dVals[2]; // C: Город
+    pVals[3] = mergeUniqueLines_(pVals[3], dVals[3], '\n'); // D: ЛПР
+    pVals[4] = formatRussianPhones_(mergeUniqueLines_(pVals[4], dVals[4], '\n')); // E: Телефон
+    pVals[5] = mergeUniqueLines_(pVals[5], dVals[5], '\n'); // F: Email
+    pVals[6] = pVals[6] || dVals[6]; // G: Сфера
+
+    if ((!pVals[7] || String(pVals[7]).toLowerCase() === 'нет') && dVals[7] && String(dVals[7]).toLowerCase() !== 'нет') {
+      pVals[7] = dVals[7];
+      pVals[8] = pVals[8] || dVals[8];
+      pVals[9] = pVals[9] || dVals[9];
+    }
+
+    totalTons += dTons;
+    totalRev  += dRev;
+
+    const holdingLine = `[Смежное юрлицо: ${dComp}${dInn ? ' ИНН ' + dInn : ''} | ${Number(dTons.toFixed(2))} тн / ${Math.round(dRev).toLocaleString('ru-RU')} ₽${dS1c ? ' | ' + dS1c : ''}]`;
+    mergedS1C = mergedS1C ? `${mergedS1C}\n${holdingLine}` : holdingLine;
+
+    const dHist = String(dVals[13] || '').trim();
+    const mergeTag = `[Объединение Холдинга: добавлено ${dComp} (ИНН ${dInn || '—'}) - ${nowStr}]`;
+    mergedHist = prependHistoryLog_(mergedHist, mergeTag);
+    if (dHist) mergedHist = mergeUniqueLines_(mergedHist, dHist, '\n');
+
+    const dK = String(dVals[10] || '').trim();
+    if (dK) mergedK = mergeUniqueLines_(mergedK, dK.replace(/^📌\s*/, ''), ' | ');
+
+    if (dDossier) {
+      const donorHeader = `Смежное юрлицо ${dComp} (ИНН ${dInn || '—'}):\n${dDossier}`;
+      pDossier = pDossier ? `${pDossier}\n────────────────────\n${donorHeader}` : donorHeader;
+    }
+  });
+
+  pVals[10] = extractSmartSummaryFromNote_(mergedK, pDossier);
+  pVals[13] = mergedHist;
+  pVals[16] = totalTons > 0 ? Number(totalTons.toFixed(2)) : '';
+  pVals[17] = totalRev > 0 ? Math.round(totalRev) : '';
+  pVals[18] = mergedS1C;
+
+  sheet.getRange(primaryRow, 1).setNumberFormat('@');
+  sheet.getRange(primaryRow, 5).setNumberFormat('@');
+  sheet.getRange(primaryRow, 1, 1, maxCols).setValues([pVals]);
+  if (pDossier) sheet.getRange(primaryRow, 2).setNote(pDossier);
+
+  // Удаляем строки-доноры строго снизу вверх
+  donorRows.slice().sort((a, b) => b - a).forEach(dRow => {
+    sheet.deleteRow(dRow);
+  });
+
+  recalculateWhaleSegmentsOnSheet_(sheet);
+  refreshSingleRowTactic_(sheet, primaryRow);
+  highlightDuplicateInnsOnSheet_(sheet);
+
+  ss.toast(
+    `Холдинг собран в стр. ${primaryRow} (${pComp}): всего ${Number(totalTons.toFixed(2))} тн / ${Math.round(totalRev).toLocaleString('ru-RU')} ₽.`,
+    'Сборка Холдинга',
+    6
+  );
+}
+// =================================================================
+// ПРОБЕЛ №7: БЫСТРАЯ ПРОВЕРКА КОНТРАГЕНТА ПО ИНН В 1 КЛИК
+// Открывает прямые ссылки на Rusprofile, Checko, ЗачестныйБизнес, ЕГРЮЛ и поиск контактов.
+// =================================================================
+
+function openInnCheckDialog() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const sheet = ss.getActiveSheet();
+  const sheetName = sheet.getName().trim();
+  const range = sheet.getActiveRange();
+
+  if (!range || range.getRow() < 2) {
+    ui.alert('Выделите строку с контрагентом.');
+    return;
+  }
+
+  const row = range.getRow();
+  const isSup = sheetName.toLowerCase().replace(/^\d+\.\s*/, '').trim() === 'закупки';
+  const rawInn = String(sheet.getRange(row, isSup ? 2 : 1).getValue() || '').replace(/\D/g, '');
+  const rawComp = String(sheet.getRange(row, isSup ? 3 : 2).getValue() || '').trim();
+
+  if (!rawInn && !rawComp) {
+    ui.alert('В выбранной строке не указаны ни ИНН, ни название компании.');
+    return;
+  }
+
+  const queryKey = rawInn || rawComp;
+  const encQ = encodeURIComponent(queryKey);
+  const encContacts = encodeURIComponent(`${rawComp} ${rawInn} отдел снабжения телефон контакты`.trim());
+  const esc = (s) => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+
+  const html = `<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><style>
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:16px;background:#f8fafc;color:#0f172a;}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;}
+    .title{font-size:15px;font-weight:800;margin-bottom:4px;}
+    .sub{font-size:12px;color:#475569;margin-bottom:14px;}
+    .btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:10px 12px;margin-bottom:8px;border-radius:7px;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#0f172a;}
+    .btn:hover{background:#eff6ff;border-color:#2563eb;color:#1d4ed8;}
+    .btn-primary{background:#0f172a;color:#fff;border-color:#0f172a;}
+    .btn-primary:hover{background:#1e293b;color:#fff;}
+    .copy-btn{width:100%;padding:8px;border-radius:6px;border:1px dashed #94a3b8;background:#f1f5f9;color:#334155;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px;}
+  </style></head><body>
+    <div class="card">
+      <div class="title">${esc(rawComp || 'Контрагент')}</div>
+      <div class="sub">ИНН: <b>${esc(rawInn || 'не указан')}</b></div>
+      <a class="btn btn-primary" target="_blank" href="https://www.rusprofile.ru/search?query=${encQ}">Открыть в Rusprofile (финансы / связи / суды)</a>
+      <a class="btn" target="_blank" href="https://checko.ru/search?query=${encQ}">Открыть в Checko (выручка / контракты)</a>
+      <a class="btn" target="_blank" href="https://zachestnyibiznes.ru/search?query=${encQ}">Открыть в ЗачестныйБизнес</a>
+      <a class="btn" target="_blank" href="https://egrul.nalog.ru/index.html">Выписка ЕГРЮЛ ФНС (вставьте ИНН)</a>
+      <a class="btn" target="_blank" href="https://yandex.ru/search/?text=${encContacts}">Яндекс: найти телефоны снабжения</a>
+      ${rawInn ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${rawInn}');this.innerText='ИНН ${rawInn} скопирован!';">Скопировать ИНН (${rawInn})</button>` : ''}
+    </div>
+  </body></html>`;
+
+  ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(440).setHeight(390), 'Проверка контрагента по ИНН');
+}
