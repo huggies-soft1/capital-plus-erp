@@ -150,7 +150,8 @@ function addSelectedRowToContacts() {
 function extractCleanNoteForContact_(bNoteRaw, kNoteRaw) {
   if (bNoteRaw) {
     return bNoteRaw
-      .replace(/^🗂️\s*ДОСЬЕ КЛИЕНТА[^\n]*\n+/i, '')
+      .replace(/^(?:🗂️\s*)?ДОСЬЕ КЛИЕНТА[^\n]*\n*/i, '')
+      .replace(/^─+\s*\n*/i, '')
       .trim();
   }
   if (kNoteRaw) {

@@ -9,15 +9,6 @@
  * - Быстрый ввод времени в L (14 / 1430 / 14 30) + выпадающий календарь + авто-подъем очереди при обновлении.
  */
 
-/**
- * 🚀 ОДНОКРАТНАЯ АВТО-СБОРКА И ОЧИСТКА БАЗЫ КИТОВ ИЗ ДВУХ 1С («КАПИТАЛ-ПЛЮС» + «РЕГИОН-ЛИДЕР»)
- * Запускается АВТОМАТИЧЕСКИ при обновлении страницы Таблицы (onOpen) или кнопкой «Выполнить» в редакторе Apps Script!
- */
-function rebuildWhalesAndCleanCrmFrom1C() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  autoMigrateAndCleanWhalesV67_(ss, true);
-}
-
 const STANDARD_PIPE_DIAMS_ = [
   1420, 1220, 1020, 920, 820, 720, 630, 530, 478, 426, 402, 377, 351,
   325, 299, 273, 245, 219, 194, 168, 159, 152, 148, 146, 133, 127,
@@ -1664,17 +1655,6 @@ function checkInnAcrossAllSheets_(ss, currentSheetName, currentRow, targetInn) {
   }
 }
 
-function highlightAllDuplicateInnsManual() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
-  const dupCells = highlightDuplicateInnsOnSheet_(sheet);
-  if (dupCells > 0) {
-    ss.toast(`Найдено и подсвечено красным ячеек с дублями ИНН: ${dupCells} шт.`, "⚠️ Найдены дубли ИНН", 5);
-  } else {
-    ss.toast("На текущем листе дублей ИНН нет — все компании уникальны!", "✅ Дублей нет", 4);
-  }
-}
-
 function prependHistoryLog_(existingHistory, newTag) {
   const cleanHist = String(existingHistory || '').trim();
   if (!cleanHist) return newTag;
@@ -2290,160 +2270,6 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   highlightDuplicateInnsOnSheet_(sheet);
 }
 
-// =================================================================
-// АВТО-СБОРКА И ОЧИСТКА «2. ЗОЛОТОЙ СПИСОК (КИТЫ)» (ВАРИАНТ 1 + КОЛОНКА S, 2 ФИРМЫ: КП + РЛ)
-// =================================================================
-
-const WHALES_2FIRMS_MASTER_ROWS_ = []; // Отключено: старый склеенный слепок удален, живые данные хранятся на листе «2. Золотой список (Киты)»
-
-function autoMigrateAndCleanWhalesV67_(ss, forceRun) {
-  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
-  const whaleSheet = getSheetByNameSafe(ss, "2. Золотой список (Киты)");
-  if (!whaleSheet) return;
-
-  // ЖЕЛЕЗНЫЙ ПРЕДОХРАНИТЕЛЬ: если на листе Китов уже создана 19-я колонка S («Что брали в 1С»),
-  // никогда не перезаписываем живой лист старым массивом (независимо от количества строк на листе)!
-  if (whaleSheet.getMaxColumns() >= 19 && whaleSheet.getLastRow() >= 2) {
-    const s1 = String(whaleSheet.getRange(1, 19).getValue() || "").trim();
-    if (s1.includes("1С") && forceRun !== "FORCE_REBUILD_CONFIRMED") {
-      return;
-    }
-  }
-
-  const callSheet = getSheetByNameSafe(ss, "1. Обзвон (База)");
-  const waitSheet = getSheetByNameSafe(ss, "3. Лист ожидания");
-  const archSheet = getSheetByNameSafe(ss, "4.Архив лидов");
-
-  // 1. Собираем существующие заметки Досье (на ячейках колонки B) со всех листов по ИНН, чтобы ни одно Досье не пропало
-  const dossierByInn = {};
-  [whaleSheet, callSheet, waitSheet].forEach(sh => {
-    if (!sh || sh.getLastRow() < 2) return;
-    const lRow = sh.getLastRow();
-    const inns = sh.getRange(2, 1, lRow - 1, 1).getValues();
-    const notes = sh.getRange(2, 2, lRow - 1, 1).getNotes();
-    for (let i = 0; i < inns.length; i++) {
-      const cleanInn = String(inns[i][0] || "").replace(/\D/g, "");
-      const noteText = String(notes[i][0] || "").trim();
-      if (cleanInn && noteText) {
-        if (!dossierByInn[cleanInn]) {
-          dossierByInn[cleanInn] = noteText;
-        } else if (!dossierByInn[cleanInn].includes(noteText)) {
-          dossierByInn[cleanInn] += "\n────────────────────\n" + noteText;
-        }
-      }
-    }
-  });
-
-  const masterInnSet = new Set(WHALES_2FIRMS_MASTER_ROWS_.map(r => String(r[0] || "").replace(/\D/g, "")).filter(Boolean));
-
-  // 2. Удаляем перенесенных в Киты покупателей 1С с листов «1. Обзвон (База)» и «3. Лист ожидания» (снизу вверх)
-  [callSheet, waitSheet].forEach(sh => {
-    if (!sh || sh.getLastRow() < 2) return;
-    const lRow = sh.getLastRow();
-    const inns = sh.getRange(2, 1, lRow - 1, 1).getValues();
-    for (let i = inns.length - 1; i >= 0; i--) {
-      const cleanInn = String(inns[i][0] || "").replace(/\D/g, "");
-      if (cleanInn && masterInnSet.has(cleanInn)) {
-        sh.deleteRow(i + 2);
-      }
-    }
-  });
-
-  // 3. Возвращаем закрытую компанию ООО "ЖИЛПРОМСТРОЙ ПЛЮС" (3128089417) в «4.Архив лидов», если её там ещё нет
-  if (archSheet) {
-    const aLast = archSheet.getLastRow();
-    let hasJps = false;
-    if (aLast >= 2) {
-      const aInns = archSheet.getRange(2, 1, aLast - 1, 1).getValues();
-      hasJps = aInns.some(r => String(r[0] || "").replace(/\D/g, "") === "3128089417");
-    }
-    if (!hasJps) {
-      insertAndFormatRow_(archSheet, [
-        "3128089417",
-        'ООО "ЖИЛПРОМСТРОЙ ПЛЮС"',
-        "309514, Белгородская область, г. Старый Оскол, ул. Стадионная, д. 11А",
-        "",
-        "+7 (472) 522-52-07\n+7 (472) 543-97-04\n+7 (472) 522-04-89",
-        "jps_plus@mail.ru\ngps_plus@mail.ru\noskol.avtodor@gmail.com",
-        "Строительство",
-        "Нет",
-        "",
-        "",
-        "",
-        "",
-        "Отказ (Закрылись)",
-        "[⛔ В Архив: Отказ (Закрылись) (из «1. Обзвон (База)») - 21.10.2026 11:37]"
-      ]);
-    }
-  }
-
-  // 4. Подготавливаем 19 колонок (A..S) на листе «2. Золотой список (Киты)»
-  const maxCols = whaleSheet.getMaxColumns();
-  if (maxCols < 19) {
-    whaleSheet.insertColumnsAfter(maxCols, 19 - maxCols);
-  }
-  const styleSource = whaleSheet.getRange(1, 15, 1, 1);
-  const headerTarget = whaleSheet.getRange(1, 16, 1, 4);
-  styleSource.copyTo(headerTarget, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-  headerTarget.setValues([["🏆 Сегмент (A/B/C)", "⚖️ Объем (тн)", "💰 Выручка (₽)", "📦 Что брали в 1С (КП / РЛ)"]]);
-  headerTarget.setHorizontalAlignment("center").setVerticalAlignment("middle");
-  whaleSheet.setColumnWidth(16, 155);
-  whaleSheet.setColumnWidth(17, 130);
-  whaleSheet.setColumnWidth(18, 155);
-  whaleSheet.setColumnWidth(19, 360);
-
-  // 5. Записываем 280 строк (Этаж 1: строки 2..101 с телефонами; Этаж 2: строки 102..281 без телефонов)
-  const totalMaster = WHALES_2FIRMS_MASTER_ROWS_.length;
-  const neededMaxRow = totalMaster + 1;
-  if (whaleSheet.getMaxRows() < neededMaxRow) {
-    whaleSheet.insertRowsAfter(whaleSheet.getMaxRows(), neededMaxRow - whaleSheet.getMaxRows());
-  }
-
-  const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
-  const outValues = [];
-  const outNotesB = [];
-  const dlFormats = [];
-
-  for (let i = 0; i < totalMaster; i++) {
-    const r = WHALES_2FIRMS_MASTER_ROWS_[i].slice();
-    const cleanInn = String(r[0] || "").replace(/\D/g, "");
-    const dlParsed = parseDeadlineObj_(r[11], timeZone);
-    r[11] = dlParsed.dateObj ? dlParsed.dateObj : "";
-    dlFormats.push([dlParsed.hasTime ? "dd.MM.yyyy HH:mm" : "dd.MM.yyyy"]);
-    outValues.push(r);
-    outNotesB.push([dossierByInn[cleanInn] || ""]);
-  }
-
-  // Очищаем старое содержимое и заметки на листе Китов
-  const oldLastRow = Math.max(whaleSheet.getLastRow(), neededMaxRow);
-  whaleSheet.getRange(2, 1, oldLastRow - 1, 19).clearContent().setBackground(null).setFontColor("#0f172a").setFontWeight("normal");
-  whaleSheet.getRange(2, 2, oldLastRow - 1, 1).clearNote();
-  if ( oldLastRow > neededMaxRow ) {
-    whaleSheet.getRange(neededMaxRow + 1, 1, oldLastRow - neededMaxRow, 19).clearContent().setBackground(null);
-  }
-
-  // Форматы колонок A (ИНН), E (Телефон), H (Потребность), L (Дедлайн), Q (Объем), R (Выручка), S (1С)
-  whaleSheet.getRange(2, 1, totalMaster, 1).setNumberFormat("@");
-  whaleSheet.getRange(2, 5, totalMaster, 1).setNumberFormat("@");
-  whaleSheet.getRange(2, 8, totalMaster, 1).setNumberFormat("@");
-  const dlRange = whaleSheet.getRange(2, 12, totalMaster, 1);
-  ensureDateValidationOnCell_(dlRange);
-  dlRange.setNumberFormats(dlFormats);
-
-  whaleSheet.getRange(2, 1, totalMaster, 19).setValues(outValues);
-  whaleSheet.getRange(2, 2, totalMaster, 1).setNotes(outNotesB);
-  whaleSheet.getRange(2, 17, totalMaster, 1).setNumberFormat("#,##0.##");
-  whaleSheet.getRange(2, 18, totalMaster, 1).setNumberFormat('#,##0 "₽"');
-  whaleSheet.getRange(2, 19, totalMaster, 1).setHorizontalAlignment("left");
-
-  setupCleanDropdownsOnSheetSilent_(whaleSheet);
-  recalculateWhaleSegmentsOnSheet_(whaleSheet);
-  ss.toast(
-    "База 2 фирм (КП + РЛ) собрана: Этаж 1 (стр. 2–101, с телефонами) и Этаж 2 (стр. 102–281, без телефонов по годам). Колонки K, N, O очищены, 1С вынесена в колонку S!",
-    "✅ Киты 2.0 (Вариант 1 + Колонка S)",
-    8
-  );
-}
 // =================================================================
 // ПРОБЕЛ №4: ОБРАТНЫЙ РАДАР («КОМУ ПРОДАТЬ ЭТОТ Ø?»)
 // Ищет покупателей под конкретный диаметр: 1-й эшелон — живая заявка (H),

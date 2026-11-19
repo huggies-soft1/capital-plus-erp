@@ -1796,6 +1796,7 @@
     }
 
     /* Копирование списка в мессенджер — чистый читаемый текст без звездочек (*), без дублей состояния и с НДС 22% */
+    /* Копирование списка в мессенджер — чистый читаемый текст без звездочек (*), без дублей состояния и с НДС 22% */
     function copySelectedOrVisible() {
       var targetRows = collectTargetRows_();
       if (targetRows.length === 0) {
@@ -1819,6 +1820,7 @@
 
       var currentGrp = "";
       var diams = [];
+      var pricesList = [];
       targetRows.forEach(function(r) {
         var grp = r.getAttribute("data-group");
         if (grp !== currentGrp) {
@@ -1827,6 +1829,7 @@
         }
         var name = r.querySelector(".col-name").innerText.trim();
         var diam = r.querySelectorAll(".col-center")[0].innerText.trim();
+        var wallVal = r.querySelectorAll(".col-center")[1].innerText.trim();
         if (diam && diams.indexOf(diam) === -1) diams.push(diam);
         var cat = r.querySelector(".tag-category").innerText.trim();
         var gost = r.querySelector(".tag-gost").innerText.trim();
@@ -1834,6 +1837,11 @@
         var stock = r.querySelector("[data-stock]").getAttribute("data-stock");
         var priceTn = r.querySelector(".col-price-tn").innerText.trim();
         var priceM = r.querySelector(".col-price-m").innerText.trim();
+
+        if (pricesList.length < 5) {
+          var condVal = (r.getAttribute("data-condition") || "").slice(0, 5);
+          pricesList.push(diam + "х" + wallVal + (condVal ? " " + condVal + "." : "") + " — " + priceTn + "/т");
+        }
 
         var details = [cat, cleanGost].filter(Boolean).join(", ");
         var detailsStr = details ? " (" + details + ")" : "";
@@ -1856,6 +1864,7 @@
               mode: "whatsapp",
               isFullPrice: targetRows.length > 15,
               diams: diams,
+              pricesBrief: (targetRows.length <= 5 ? pricesList.join(", ") : ""),
               clients: clients
             });
           }
