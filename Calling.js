@@ -1549,13 +1549,26 @@ function formatRussianPhones_(rawPhone) {
 function moveRowToBottom_(sheet, row) {
   const maxRows = sheet.getMaxRows();
   const checkVals = sheet.getRange(1, 1, maxRows, 5).getValues();
+  const isWhale = isWhaleSheetName_(sheet.getName());
+  const rowHasPhone = row >= 2 && row <= checkVals.length
+    ? String(checkVals[row - 1][4] || '').replace(/\D/g, '').length >= 6
+    : false;
+
   let lastRealRow = 1;
 
   for (let r = checkVals.length - 1; r >= 1; r--) {
-    const hasData = checkVals[r].some(cell => String(cell || '').trim() !== '');
-    if (hasData) {
-      lastRealRow = r + 1;
-      break;
+    if (isWhale && rowHasPhone) {
+      const hasPhone = String(checkVals[r][4] || '').replace(/\D/g, '').length >= 6;
+      if (hasPhone) {
+        lastRealRow = r + 1;
+        break;
+      }
+    } else {
+      const hasData = checkVals[r].some(cell => String(cell || '').trim() !== '');
+      if (hasData) {
+        lastRealRow = r + 1;
+        break;
+      }
     }
   }
 
@@ -1830,11 +1843,20 @@ function insertOrMergeRowByInn_(targetSheet, rowValues, incomingDossierNote) {
     targetSheet.getRange(existingRowIdx, 1, 1, 14).setValues([mergedRow]);
 
     if (incomingDossierNote) {
-      const oldDossier = String(targetSheet.getRange(existingRowIdx, 2).getNote() || '').trim();
-      if (!oldDossier) {
-        targetSheet.getRange(existingRowIdx, 2).setNote(incomingDossierNote);
-      } else if (!oldDossier.includes(incomingDossierNote)) {
-        targetSheet.getRange(existingRowIdx, 2).setNote(oldDossier + '\n────────────────────\n' + incomingDossierNote);
+      const stripDossierHeader_ = (txt) => String(txt || '')
+        .replace(/^(?:🗂️\s*)?ДОСЬЕ КЛИЕНТА[^\n]*\n*/i, '')
+        .replace(/^ТЕГИ:\s*\[[^\]]*\]\s*\n*/i, '')
+        .replace(/^─+\s*\n*/i, '')
+        .trim();
+
+      const oldBody = stripDossierHeader_(targetSheet.getRange(existingRowIdx, 2).getNote());
+      const incBody = stripDossierHeader_(incomingDossierNote);
+
+      if (incBody && !oldBody) {
+        targetSheet.getRange(existingRowIdx, 2).setNote(rebuildDossierNoteWithTags_(incBody));
+      } else if (incBody && !oldBody.includes(incBody)) {
+        const combinedBody = `${incBody}\n────────────────────\n${oldBody}`;
+        targetSheet.getRange(existingRowIdx, 2).setNote(rebuildDossierNoteWithTags_(combinedBody));
       }
     }
     return { merged: true, row: existingRowIdx };

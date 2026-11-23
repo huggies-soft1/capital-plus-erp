@@ -1217,6 +1217,7 @@
     function copyOffer() {
       if (cart.length === 0) return;
       let totalTn = 0;
+      let totalStockTn = 0;
       let totalSum = 0;
       let separateDeliverySum = 0;
       let hasAnyBakedDelivery = false;
@@ -1229,6 +1230,7 @@
 
       cart.forEach((item, i) => {
         totalTn += item.tons;
+        totalStockTn += (item.stockTons || item.tons);
         totalSum += item.cost;
         if (item.deliveryCost > 0) {
           if (item.deliveryBaked) hasAnyBakedDelivery = true;
@@ -1251,7 +1253,7 @@
         );
       });
 
-      const cleanTruck = getTruckRecommendation(totalTn);
+      const cleanTruck = getTruckRecommendation(totalStockTn);
       lines.push("");
       lines.push(`Общий вес: ${totalTn.toFixed(3)} тн`);
       if (separateDeliverySum > 0) {

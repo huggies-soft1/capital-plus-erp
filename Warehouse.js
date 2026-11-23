@@ -673,6 +673,9 @@ function handleWarehouseSheetEdit(e, sheet) {
     else if (col === 9) {
       if (val > 0) {
         const priceTn = Math.round(val / weightPerMeterTn);
+        if (buyPriceTn > 0 && (priceTn - buyPriceTn) < MIN_MARGIN_PER_TON) {
+          ss.toast(`СТОП-ЛОСС! Маржа ${(priceTn - buyPriceTn).toLocaleString('ru-RU')} ₽/тн (минимум ${MIN_MARGIN_PER_TON} ₽/тн)!`, "Низкая маржа", 5);
+        }
         sheet.getRange(row, 8).setValue(priceTn); // H
         const currentTn = safeParseFloat(rowData[7]); // K (11)
         if (currentTn > 0) {

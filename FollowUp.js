@@ -318,6 +318,18 @@ function sendBatchFollowUpEmails(data) {
     const customOfferLine = stripAllEmojisClean_(data.customOfferLine || '');
     const isDraftOnly = (data.createDraftOnly === true);
     const includeRubles = (data.includeRubles !== false);
+
+    if (!isDraftOnly) {
+      try {
+        const remainingQuota = MailApp.getRemainingDailyQuota();
+        if (remainingQuota < clients.length) {
+          return {
+            success: false,
+            message: `Недостаточно дневной квоты Gmail: осталось ${remainingQuota} писем, выбрано ${clients.length}. Уменьшите выборку или сохраните в черновики.`
+          };
+        }
+      } catch (qErr) {}
+    }
     const nextDays = Math.max(1, parseInt(data.nextDays, 10) || 3);
     const customStatsOverride = data.customStatsOverride || null;
 
@@ -384,8 +396,15 @@ function sendBatchFollowUpEmails(data) {
           plain.push(`• Поставлявшиеся позиции: ${s1c.pipesPurchased}`);
         }
       }
-      if ((sKp && sKp.lastKpDate) || clientNeed) {
-        plain.push(`• Текущее КП / Потребность в работе: ${[sKp && sKp.lastKpDate ? 'КП от ' + sKp.lastKpDate : '', sKp && sKp.quotedSummary ? sKp.quotedSummary : '', clientNeed ? 'Заявка: ' + clientNeed : ''].filter(Boolean).join(' | ')}`);
+      const hasQuotedSummary = Boolean(
+        sKp && sKp.quotedSummary && sKp.quotedSummary !== 'Сверка потребности на ближайшие объекты'
+      );
+      if ((sKp && sKp.lastKpDate) || hasQuotedSummary || clientNeed) {
+        plain.push(`• Текущее КП / Потребность в работе: ${[
+          sKp && sKp.lastKpDate ? 'КП от ' + sKp.lastKpDate : '',
+          hasQuotedSummary ? sKp.quotedSummary : '',
+          clientNeed ? 'Заявка: ' + clientNeed : ''
+        ].filter(Boolean).join(' | ')}`);
       }
       if (customOfferLine) {
         plain.push(`\r\nПерсональное предложение / Условия торга:\r\n${customOfferLine}`);
@@ -485,10 +504,14 @@ ${userSignature.html}
               : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + nextDays);
             const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, 'yyyy-MM-dd');
 
+            const todayIso = Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd');
             const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
-            const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: '' };
+            const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: '', hasTime: false };
+            const keepExistingDeadline =
+              (curDlObj.isoDate === todayIso && curDlObj.hasTime) ||
+              (curDlObj.isoDate && curDlObj.isoDate > todayIso);
 
-            if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+            if (!keepExistingDeadline && (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso)) {
               if (typeof setDeadlineCellDate_ === 'function') {
                 setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
               } else {
@@ -572,7 +595,10 @@ function buildDefaultScenarioParagraphs_(scenarioKey, companyFormattedPlain, s1c
 
 function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
   const has1C = Boolean(s1c && s1c.has1C);
-  const hasKp = Boolean(sKp && (sKp.lastKpDate || sKp.quotedSummary));
+  const cleanQuoted = (sKp && sKp.quotedSummary && sKp.quotedSummary !== 'Сверка потребности на ближайшие объекты')
+    ? sKp.quotedSummary
+    : '';
+  const hasKp = Boolean((sKp && sKp.lastKpDate) || cleanQuoted);
   if (!has1C && !hasKp && !clientNeed) return '';
 
   if (has1C) {
@@ -590,7 +616,9 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
       detailsLines.push(`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #cbd5e1;font-size:12.5px;color:#1e293b;line-height:1.45;"><b style="color:#0f172a;">Ранее поставлявшиеся позиции:</b> ${s1c.pipesPurchased}</div>`);
     }
     if (sKp && sKp.lastKpDate) {
-      detailsLines.push(`<div style="margin-top:4px;font-size:12.5px;color:#334155;line-height:1.45;"><b style="color:#0284c7;">Крайнее направленное КП:</b> от ${sKp.lastKpDate}${sKp.quotedSummary ? ' (' + sKp.quotedSummary + ')' : ''}</div>`);
+      detailsLines.push(`<div style="margin-top:4px;font-size:12.5px;color:#334155;line-height:1.45;"><b style="color:#0284c7;">Крайнее направленное КП:</b> от ${sKp.lastKpDate}${cleanQuoted ? ' (' + cleanQuoted + ')' : ''}</div>`);
+    } else if (cleanQuoted) {
+      detailsLines.push(`<div style="margin-top:4px;font-size:12.5px;color:#15803d;line-height:1.45;"><b>Текущий запрос / спецификация:</b> ${cleanQuoted}</div>`);
     }
     if (clientNeed) {
       detailsLines.push(`<div style="margin-top:4px;font-size:12.5px;color:#15803d;line-height:1.45;"><b>Текущая потребность в работе:</b> ${clientNeed}</div>`);
@@ -609,7 +637,9 @@ function buildPartnerStatsCardHtml_(s1c, sKp, clientNeed, includeRubles) {
 
   let kpRows = [];
   if (sKp && sKp.lastKpDate) {
-    kpRows.push(`<div style="font-size:13px;color:#1e293b;line-height:1.5;"><b style="color:#0f172a;">Ранее направленное предложение:</b> от ${sKp.lastKpDate}${sKp.quotedSummary ? ' — ' + sKp.quotedSummary : ''}</div>`);
+    kpRows.push(`<div style="font-size:13px;color:#1e293b;line-height:1.5;"><b style="color:#0f172a;">Ранее направленное предложение:</b> от ${sKp.lastKpDate}${cleanQuoted ? ' — ' + cleanQuoted : ''}</div>`);
+  } else if (cleanQuoted) {
+    kpRows.push(`<div style="font-size:13px;color:#1e293b;line-height:1.5;"><b style="color:#0f172a;">Текущий запрос / спецификация:</b> ${cleanQuoted}</div>`);
   }
   if (clientNeed) {
     kpRows.push(`<div style="font-size:13px;color:#1e293b;line-height:1.5;margin-top:4px;"><b style="color:#0f172a;">Зафиксированная потребность:</b> ${clientNeed}</div>`);
@@ -655,10 +685,14 @@ function logFollowUpClientAction(payload) {
         ? getNextWorkingDateObj_(new Date(), nextDays)
         : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + nextDays);
       const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, 'yyyy-MM-dd');
+      const todayIso = Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd');
       const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
-      const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: '' };
+      const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: '', hasTime: false };
+      const keepExistingDeadline =
+        (curDlObj.isoDate === todayIso && curDlObj.hasTime) ||
+        (curDlObj.isoDate && curDlObj.isoDate > todayIso);
 
-      if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+      if (!keepExistingDeadline && (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso)) {
         if (typeof setDeadlineCellDate_ === 'function') {
           setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
         } else {

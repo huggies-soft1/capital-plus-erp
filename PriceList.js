@@ -595,11 +595,15 @@ function logClientPriceAction(payload) {
         : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
       const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
+      const todayIso = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd");
       const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
-      const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
+      const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "", hasTime: false };
+      const keepExistingDeadline =
+        (curDlObj.isoDate === todayIso && curDlObj.hasTime) ||
+        (curDlObj.isoDate && curDlObj.isoDate > todayIso);
 
-      // Ставим свежий контроль +2 раб. дня, если L пустая ИЛИ там дата раньше нового дедлайна
-      if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+      // Ставим контроль +2 раб. дня, не затирая сегодняшний перезвон по времени и будущую дату
+      if (!keepExistingDeadline && (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso)) {
         if (typeof setDeadlineCellDate_ === 'function') {
           setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
         } else {
@@ -920,6 +924,18 @@ function sendBatchProposals(data) {
     const attachFullPdf = (data.attachFullPdf !== false);
     const isFullPrice = (items.length > 15);
 
+    if (!isDraftOnly) {
+      try {
+        const remainingQuota = MailApp.getRemainingDailyQuota();
+        if (remainingQuota < clients.length) {
+          return {
+            success: false,
+            message: `Недостаточно дневной квоты Gmail: осталось ${remainingQuota} писем, выбрано ${clients.length}. Уменьшите выборку или сохраните в черновики.`
+          };
+        }
+      } catch (qErr) {}
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
     const warehouseState = getWarehouseGroupedData_(ss);
@@ -1150,10 +1166,14 @@ ${userSignature.html}
               : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
             const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
+            const todayIso = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd");
             const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
-            const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "" };
+            const curDlObj = typeof parseDeadlineObj_ === 'function' ? parseDeadlineObj_(curDeadline, timeZone) : { isoDate: "", hasTime: false };
+            const keepExistingDeadline =
+              (curDlObj.isoDate === todayIso && curDlObj.hasTime) ||
+              (curDlObj.isoDate && curDlObj.isoDate > todayIso);
 
-            if (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso) {
+            if (!keepExistingDeadline && (!curDlObj.isoDate || curDlObj.isoDate < nextFollowUpIso)) {
               if (typeof setDeadlineCellDate_ === 'function') {
                 setDeadlineCellDate_(targetSheet, actualRow, nextFollowUp, false);
               } else {

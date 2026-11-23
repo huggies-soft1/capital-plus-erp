@@ -28,50 +28,60 @@ function onOpen() {
     .addSeparator()
     .addItem('Обратный Радар: кому продать этот Ø?', 'openReverseRadarForActivePipe')
     .addItem('Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
+    .addItem('Обновить очередь и дедлайны (все листы)', 'refreshAllCrmQueuesManual')
     .addSeparator()
     .addItem('Отсортировать склад по диаметрам', 'sortWarehouseData')
     .addItem('Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
     .addToUi();
 
   try {
-    const startMs = Date.now();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const activeSheet = ss.getActiveSheet();
-    const activeRange = activeSheet ? activeSheet.getActiveRange() : null;
+    if (!activeSheet) return;
+
+    const actName = activeSheet.getName().trim();
+    const sortableSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
+    if (!sortableSheets.includes(actName)) return;
+
+    const activeRange = activeSheet.getActiveRange();
     const activeRow = activeRange ? activeRange.getRow() : 2;
-    const activeCol = activeRange ? activeSheet.getActiveRange().getColumn() : 1;
+    const activeCol = activeRange ? activeRange.getColumn() : 1;
 
-    const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
-    if (activeSheet) {
-      const actName = activeSheet.getName().trim();
-      const idx = crmSheets.indexOf(actName);
-      if (idx > 0) {
-        crmSheets.splice(idx, 1);
-        crmSheets.unshift(actName);
-      }
+    if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
+      syncUnpackedNotesOnSheetSilent_(activeSheet);
+    }
+    if (typeof sortAndHighlightDeadlinesOnSheet_ === 'function') {
+      sortAndHighlightDeadlinesOnSheet_(activeSheet);
+    } else if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
+      highlightDuplicateInnsOnSheet_(activeSheet);
     }
 
-    for (let i = 0; i < crmSheets.length; i++) {
-      if (Date.now() - startMs > 20000) break;
-      const sh = getSheetByNameSafe(ss, crmSheets[i]);
-      if (sh) {
-        if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
-          syncUnpackedNotesOnSheetSilent_(sh);
-        }
-        if (typeof sortAndHighlightDeadlinesOnSheet_ === 'function') {
-          sortAndHighlightDeadlinesOnSheet_(sh);
-        } else if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
-          highlightDuplicateInnsOnSheet_(sh);
-        }
-      }
-    }
-
-    if (activeSheet && activeRow >= 1 && activeCol >= 1) {
-      const safeRow = Math.min(activeRow, Math.max(1, activeSheet.getMaxRows()));
-      const safeCol = Math.min(activeCol, Math.max(1, activeSheet.getMaxColumns()));
-      activeSheet.setActiveSelection(activeSheet.getRange(safeRow, safeCol));
-    }
+    const safeRow = Math.min(activeRow, Math.max(1, activeSheet.getMaxRows()));
+    const safeCol = Math.min(activeCol, Math.max(1, activeSheet.getMaxColumns()));
+    activeSheet.setActiveSelection(activeSheet.getRange(safeRow, safeCol));
+    ss.toast(`Лист «${actName}» отсортирован — можно работать`, 'Очередь готова', 3);
   } catch (e) {}
+}
+
+function refreshAllCrmQueuesManual() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const crmSheets = ["1. Обзвон (База)", "3. Лист ожидания", "2. Золотой список (Киты)"];
+  ss.toast('Обновляю дедлайны, заметки и этажи по всем 3 листам...', 'Сортировка', 4);
+
+  crmSheets.forEach(sName => {
+    const sh = getSheetByNameSafe(ss, sName);
+    if (!sh) return;
+    if (typeof syncUnpackedNotesOnSheetSilent_ === 'function') {
+      syncUnpackedNotesOnSheetSilent_(sh);
+    }
+    if (typeof sortAndHighlightDeadlinesOnSheet_ === 'function') {
+      sortAndHighlightDeadlinesOnSheet_(sh);
+    } else if (typeof highlightDuplicateInnsOnSheet_ === 'function') {
+      highlightDuplicateInnsOnSheet_(sh);
+    }
+  });
+
+  ss.toast('Все 3 клиентских листа обновлены и выстроены по дедлайнам!', 'Готово', 4);
 }
 
 // =================================================================
