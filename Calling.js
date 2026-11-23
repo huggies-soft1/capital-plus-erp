@@ -202,7 +202,7 @@ function handleCallingSheetEdit(e, sheet) {
     } else {
       cell.clearContent();
       cell.setNumberFormat("dd.MM.yyyy");
-      cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+      updateSingleRowDeadlineHighlight_(sheet, row);
     }
     return;
   }
@@ -1918,7 +1918,7 @@ function setDeadlineCellDate_(sheet, row, dateObj, hasTime) {
   if (!dateObj) {
     cell.clearContent();
     cell.setNumberFormat("dd.MM.yyyy");
-    cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+    updateSingleRowDeadlineHighlight_(sheet, row);
     return;
   }
   const safeDateObj = shiftWeekendToMonday_(dateObj);
@@ -2047,29 +2047,41 @@ function extractHistoryCallbackTime_(firstHistLine) {
 
 function computeDeadlineStyle_(dlObj, todayStr, nowHHMM) {
   if (!dlObj || !dlObj.isoDate) {
-    return { bg: null, color: '#0f172a', weight: 'normal' };
+    return { bg: '#f1f5f9', color: '#64748b', weight: 'normal' };
   }
   if (dlObj.isoDate < todayStr) {
     return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
   }
-  if (dlObj.isoDate === todayStr) {
-    if (dlObj.timeStr && nowHHMM >= dlObj.timeStr) {
-      return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
-    }
-    return { bg: '#fef9c3', color: '#854d0e', weight: 'bold' };
+  if (dlObj.isoDate === todayStr && dlObj.hasTime && dlObj.timeStr && nowHHMM >= dlObj.timeStr) {
+    return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
   }
-  return { bg: '#dcfce7', color: '#166534', weight: 'normal' };
+  if (dlObj.hasTime) {
+    return { bg: '#f3e8ff', color: '#6b21a8', weight: 'bold' };
+  }
+  if (dlObj.isoDate === todayStr) {
+    return { bg: '#dcfce7', color: '#166534', weight: 'bold' };
+  }
+  return { bg: '#fef9c3', color: '#854d0e', weight: 'normal' };
 }
 
 function updateSingleRowDeadlineHighlight_(sheet, row, preParsedObj) {
   if (!sheet || row < 2) return;
+  const cell = sheet.getRange(row, 12);
+  const sheetName = sheet.getName().trim();
+  const rowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+  const hasData = rowVals.some(v => v !== null && v !== undefined && String(v).trim() !== '');
+
+  if (!hasData || sheetName === "4.Архив лидов") {
+    cell.setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
+    return;
+  }
+
   const ss = sheet.getParent();
   const timeZone = ss.getSpreadsheetTimeZone() || "Europe/Moscow";
   const now = new Date();
   const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
   const nowHHMM  = Utilities.formatDate(now, timeZone, "HH:mm");
 
-  const cell = sheet.getRange(row, 12);
   const dlObj = preParsedObj || parseDeadlineObj_(cell.getValue(), timeZone);
   const st = computeDeadlineStyle_(dlObj, todayStr, nowHHMM);
 
