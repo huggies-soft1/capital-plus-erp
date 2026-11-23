@@ -201,8 +201,8 @@ function parseFollowUp1CStats_(segP, tonsQ, revR, s1cInfo, now) {
 
   const s = String(s1cInfo || '').trim();
   if (s) {
-    const updMatch = s.match(/УПД:\s*(\d+)/i);
-    if (updMatch) updCount = parseInt(updMatch[1], 10) || 0;
+    const updMatch = s.match(/(?:УПД:\s*(\d+)|(\d+)\s*УПД)/i);
+    if (updMatch) updCount = parseInt(updMatch[1] || updMatch[2], 10) || 0;
 
     const lastMatch = s.match(/посл\.\s*(\d{2})\.(\d{2})\.(\d{4})/i);
     if (lastMatch) {
@@ -213,14 +213,25 @@ function parseFollowUp1CStats_(segP, tonsQ, revR, s1cInfo, now) {
       }
     }
 
-    const yearsMatch = s.match(/\[[^\]]+\]\s*([^|]+?)\s*\|\s*УПД:/i);
-    if (yearsMatch) yearsStr = yearsMatch[1].trim();
+    const yearsParenMatch = s.match(/\(\s*(\d{4}(?:\s*[–\-]\s*\d{4})?)\s*,/);
+    const yearsBracketMatch = s.match(/\[[^\]]+\]\s*([^|]+?)\s*\|\s*УПД:/i);
+    if (yearsParenMatch) {
+      const rawY = yearsParenMatch[1].trim();
+      yearsStr = /[–\-]/.test(rawY) ? `${rawY} гг.` : `${rawY} г.`;
+    } else if (yearsBracketMatch) {
+      yearsStr = yearsBracketMatch[1].trim();
+    }
 
-    const parts = s.split('|').map(p => p.trim());
-    if (parts.length >= 3) {
-      pipesPurchased = parts.slice(2).join(' | ').trim();
+    const colonSplit = s.match(/^[^:]+?\([^)]*УПД[^)]*\)\s*:\s*(.+)$/i);
+    if (colonSplit && colonSplit[1]) {
+      pipesPurchased = colonSplit[1].trim();
     } else {
-      pipesPurchased = s.replace(/^\[[^\]]+\]\s*/, '').trim();
+      const parts = s.split('|').map(p => p.trim());
+      if (parts.length >= 3) {
+        pipesPurchased = parts.slice(2).join(' | ').trim();
+      } else {
+        pipesPurchased = s.replace(/^\[[^\]]+\]\s*/, '').trim();
+      }
     }
   }
 

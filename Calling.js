@@ -1320,21 +1320,49 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
   return statusParts.join(' | ') + scaleTag;
 }
 
+function computeTacticStyle_(tacticText) {
+  const s = String(tacticText || '').trim();
+  if (!s) return { bg: null, color: '#0f172a', weight: 'normal' };
+  const up = s.toUpperCase();
+
+  if (up.includes('В НАЛИЧИИ ПОД ЗАЯВКУ')) {
+    return { bg: '#dcfce7', color: '#166534', weight: 'bold' };
+  }
+  if (up.includes('ВЫСТАВЛЕН СЧЕТ') || up.includes('ВЫСТАВЛЕН СЧЁТ')) {
+    return { bg: '#dbeafe', color: '#1e40af', weight: 'bold' };
+  }
+  if (up.includes('НЕТ НА СКЛАДЕ')) {
+    return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
+  }
+  if (up.includes('УСТАРЕЛ')) {
+    return { bg: '#ffedd5', color: '#9a3412', weight: 'bold' };
+  }
+  if (up.includes('ПРАЙС НЕ ВЫСЫЛАЛСЯ')) {
+    return { bg: '#fef9c3', color: '#854d0e', weight: 'normal' };
+  }
+  if (up.includes('СКЛАД ПОД ОТГРУЗКИ') || up.includes('ПРАЙС ОТ') || up.includes('ПРАЙС ОТПРАВЛЕН')) {
+    return { bg: '#f0f9ff', color: '#0369a1', weight: 'normal' };
+  }
+  return { bg: null, color: '#334155', weight: 'normal' };
+}
+
 function refreshSingleRowTactic_(sheet, row) {
   if (!sheet || !isSheetWithStockMonitor_(sheet.getName()) || row < 2) return;
   if (sheet.getMaxColumns() < 15) return;
   const readCols = Math.min(19, Math.max(14, sheet.getMaxColumns()));
   const rowVals = sheet.getRange(row, 1, 1, readCols).getValues()[0];
   const hasAny = rowVals.slice(0, 14).some(v => v !== null && v !== undefined && String(v).trim() !== '');
+  const tacticCell = sheet.getRange(row, 15);
   if (!hasAny) {
-    sheet.getRange(row, 15).clearContent().setBackground(null);
+    tacticCell.clearContent().setBackground(null).setFontColor('#0f172a').setFontWeight('normal');
     return;
   }
   const ss = sheet.getParent();
   const stockByDiam = getAvailableStockDiamsMap_(ss);
   const dossierNote = sheet.getRange(row, 2).getNote();
   const tactic = computeDynamicTacticForRow_(rowVals, stockByDiam, dossierNote);
-  sheet.getRange(row, 15).setValue(tactic);
+  const st = computeTacticStyle_(tactic);
+  tacticCell.setValue(tactic).setBackground(st.bg).setFontColor(st.color).setFontWeight(st.weight);
 }
 
 // =================================================================
@@ -1478,7 +1506,12 @@ function matchWarehouseWithWaitingList() {
 
     sh.getRange(2, 8, lRow - 1, 1).setBackgrounds(needBgColors);
     if (sh.getMaxColumns() >= 15 && tacticsCol.length > 0) {
-      sh.getRange(2, 15, lRow - 1, 1).setValues(tacticsCol);
+      const tacticRange = sh.getRange(2, 15, lRow - 1, 1);
+      const tStyles = tacticsCol.map(rowArr => computeTacticStyle_(rowArr[0]));
+      tacticRange.setValues(tacticsCol);
+      tacticRange.setBackgrounds(tStyles.map(s => [s.bg]));
+      tacticRange.setFontColors(tStyles.map(s => [s.color]));
+      tacticRange.setFontWeights(tStyles.map(s => [s.weight]));
     }
   });
 
@@ -1585,16 +1618,33 @@ function highlightDuplicateInnsOnSheet_(sheet, minRowToCover) {
   const lastRow = Math.min(sheet.getMaxRows(), Math.max(sheet.getLastRow() + 5, minRowToCover || 2));
   if (lastRow < 2) return 0;
 
+  const ss = sheet.getParent();
+  const crmSheets = [
+    "1. Обзвон (База)",
+    "2. Золотой список (Киты)",
+    "3. Лист ожидания",
+    "4.Архив лидов"
+  ];
+
+  // Считаем ИНН сквозным проходом по ВСЕМ 4 клиентским листам
+  const globalCounts = {};
+  crmSheets.forEach(sName => {
+    const sh = getSheetByNameSafe(ss, sName);
+    if (!sh) return;
+    const shLast = sh.getLastRow();
+    if (shLast < 2) return;
+    const vals = sh.getRange(2, 1, shLast - 1, 1).getValues();
+    vals.forEach(r => {
+      const clean = String(r[0] || '').replace(/\D/g, '');
+      if (clean.length === 10 || clean.length === 12) {
+        globalCounts[clean] = (globalCounts[clean] || 0) + 1;
+      }
+    });
+  });
+
   const numRows = lastRow - 1;
   const innRange = sheet.getRange(2, 1, numRows, 1);
   const innValues = innRange.getValues();
-  const counts = {};
-  innValues.forEach(r => {
-    const clean = String(r[0] || '').replace(/\D/g, '');
-    if (clean.length >= 10) {
-      counts[clean] = (counts[clean] || 0) + 1;
-    }
-  });
 
   const bgColors = [];
   const fontColors = [];
@@ -1602,12 +1652,19 @@ function highlightDuplicateInnsOnSheet_(sheet, minRowToCover) {
   let dupCount = 0;
 
   innValues.forEach(r => {
-    const clean = String(r[0] || '').replace(/\D/g, '');
-    if (clean.length >= 10 && counts[clean] > 1) {
+    const raw = String(r[0] || '').trim();
+    const clean = raw.replace(/\D/g, '');
+    const isValidLen = (clean.length === 10 || clean.length === 12);
+
+    if (isValidLen && globalCounts[clean] > 1) {
       bgColors.push(['#fee2e2']);
       fontColors.push(['#991b1b']);
       fontWeights.push(['bold']);
       dupCount++;
+    } else if (raw !== '' && !isValidLen) {
+      bgColors.push(['#fef3c7']);
+      fontColors.push(['#92400e']);
+      fontWeights.push(['bold']);
     } else {
       bgColors.push([null]);
       fontColors.push(['#0f172a']);
@@ -1660,6 +1717,13 @@ function checkInnAcrossAllSheets_(ss, currentSheetName, currentRow, targetInn) {
   });
 
   if (matches.length > 0) {
+    const curSh = getSheetByNameSafe(ss, currentSheetName);
+    if (curSh && currentRow >= 2) {
+      curSh.getRange(currentRow, 1)
+        .setBackground('#fee2e2')
+        .setFontColor('#991b1b')
+        .setFontWeight('bold');
+    }
     ss.toast(
       `ИНН ${targetInn} уже есть в базе:\n` + matches.join(';\n'),
       "⚠️ ВНИМАНИЕ: ДУБЛЬ ИНН!",
@@ -2094,6 +2158,12 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const allowedSheets = ["1. Обзвон (База)", "2. Золотой список (Киты)", "3. Лист ожидания"];
   if (!allowedSheets.includes(sheetName)) return;
 
+  try {
+    if (sheet.getConditionalFormatRules().length > 0) {
+      sheet.clearConditionalFormatRules();
+    }
+  } catch (e) {}
+
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return;
 
@@ -2267,6 +2337,9 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const dlBgs = [];
   const dlColors = [];
   const dlWeights = [];
+  const tacticBgs = [];
+  const tacticColors = [];
+  const tacticWeights = [];
 
   items.forEach(it => {
     if (it.isEmpty) {
@@ -2274,6 +2347,11 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
       dlBgs.push([null]);
       dlColors.push(['#0f172a']);
       dlWeights.push(['normal']);
+      if (hasMonitor) {
+        tacticBgs.push([null]);
+        tacticColors.push(['#0f172a']);
+        tacticWeights.push(['normal']);
+      }
       return;
     }
 
@@ -2290,12 +2368,26 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     dlBgs.push([st.bg]);
     dlColors.push([st.color]);
     dlWeights.push([st.weight]);
+
+    if (hasMonitor) {
+      const tst = computeTacticStyle_(it.values[14]);
+      tacticBgs.push([tst.bg]);
+      tacticColors.push([tst.color]);
+      tacticWeights.push([tst.weight]);
+    }
   });
 
   sheet.getRange(2, 8, numRows, 1).setBackgrounds(needBgs);
   dlRange.setBackgrounds(dlBgs);
   dlRange.setFontColors(dlColors);
   dlRange.setFontWeights(dlWeights);
+
+  if (hasMonitor) {
+    const tacticRange = sheet.getRange(2, 15, numRows, 1);
+    tacticRange.setBackgrounds(tacticBgs);
+    tacticRange.setFontColors(tacticColors);
+    tacticRange.setFontWeights(tacticWeights);
+  }
 
   if (isWhale) {
     try { recalculateWhaleSegmentsOnSheet_(sheet); } catch (e) {}
