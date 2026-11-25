@@ -191,7 +191,7 @@
         </div>
         <div>
           <label>Состояние:</label>
-          <select id="newCond">
+          <select id="newCond" onchange="onNewCondChanged()">
             <option value="Новая">Новая</option>
             <option value="Восстановленная">Восстановленная</option>
             <option value="Лежалая">Лежалая</option>
@@ -218,6 +218,14 @@
       <div class="grid-2">
         <div><label>Закупка (₽/тн):</label><input type="number" id="newBuyPrice" placeholder="45000"></div>
         <div><label>Продажа (₽/тн):</label><input type="number" id="newSellPrice" placeholder="55000"></div>
+      </div>
+      <div id="newMtcBox" style="margin-top:8px; padding:8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px;">
+        <label style="margin-top:0; color:#1e40af;">Сертификат (MTC — обязательно для Новой):</label>
+        <input type="text" id="newMtcInput" placeholder="№ серт., завод (ВМЗ/ТМК), плавка, ссылка PDF...">
+        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; text-transform:none; color:#92400e; cursor:pointer;">
+          <input type="checkbox" id="newMtcQuarantine" style="width:auto;">
+          Сертификат в пути (поставить в «Карантин (Нет MTC)»)
+        </label>
       </div>
     </div>
 
@@ -279,6 +287,15 @@
       </div>
 
       <div id="marginBar" class="margin-bar"></div>
+    </div>
+
+    <div id="addMtcBox" style="display:none; margin-top:8px; padding:8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px;">
+      <label style="margin-top:0; color:#1e40af;">Сертификат приходящей партии (MTC):</label>
+      <input type="text" id="addMtcInput" placeholder="№ серт., завод (ВМЗ/ТМК), плавка, ссылка PDF...">
+      <label style="display:flex; align-items:center; gap:6px; margin-top:6px; text-transform:none; color:#92400e; cursor:pointer;">
+        <input type="checkbox" id="addMtcQuarantine" style="width:auto;">
+        Сертификат в пути (поставить в «Карантин (Нет MTC)»)
+      </label>
     </div>
 
     <!-- Блок параметров переработки Б/у -> Восстановленная (для вкладки ЦЕХ) -->
@@ -677,10 +694,36 @@
 
       clearCart();
       filterSelect();
+      updateAddMtcBox_();
       updatePhysicsUI();
       syncBargainSliderBounds_();
       updateMarginPreview();
       updateLogisticsPreview();
+    }
+
+    function onNewCondChanged() {
+      const cond = document.getElementById('newCond').value;
+      const isNew = cond === 'Новая';
+      const box = document.getElementById('newMtcBox');
+      if (box) box.style.display = isNew ? 'block' : 'none';
+      if (isNew) {
+        document.getElementById('newGost').value = 'ГОСТ 10704-91';
+      }
+    }
+
+    function updateAddMtcBox_() {
+      const box = document.getElementById('addMtcBox');
+      if (!box) return;
+      if (currentMode === 'add' && !isCreatingNew && selectedIdx !== null && inventory[selectedIdx]) {
+        const isNew = (inventory[selectedIdx].condition || '').toLowerCase().includes('нов');
+        box.style.display = isNew ? 'block' : 'none';
+        if (isNew) {
+          document.getElementById('addMtcInput').value = '';
+          document.getElementById('addMtcQuarantine').checked = false;
+        }
+      } else {
+        box.style.display = 'none';
+      }
     }
 
     function toggleNewForm(show) {
@@ -697,10 +740,12 @@
         document.getElementById("metersInput").disabled = true;
         document.getElementById("metersInput").placeholder = "Авто-расчет";
         document.getElementById("btnAddToCart").disabled = false;
+        onNewCondChanged();
       } else {
         document.getElementById("metersInput").disabled = false;
         document.getElementById("metersInput").placeholder = "0.0";
       }
+      updateAddMtcBox_();
       updatePhysicsUI();
       syncBargainSliderBounds_();
       updateLogisticsPreview();
@@ -856,6 +901,7 @@
         updateLogisticsPreview();
       } else if (currentMode === 'add') {
         document.getElementById("dealPriceInput").value = p.buyPriceTn > 0 ? p.buyPriceTn : "";
+        updateAddMtcBox_();
       } else if (currentMode === 'restore') {
         const existingRestored = inventory.find(x =>
           x.diam === p.diam && x.wall === p.wall && (x.condition || '').toLowerCase().includes('восст')
@@ -984,9 +1030,16 @@
         const sellPr = parseFloat(document.getElementById("newSellPrice").value) || 0;
 
         if (!d || !w) return alert("Укажите диаметр и стенку!");
+        const newMtc = (document.getElementById("newMtcInput").value || "").trim();
+        const newQuarantine = document.getElementById("newMtcQuarantine").checked;
+        if (cond === 'Новая' && !newMtc && !newQuarantine) {
+          return alert("MTC GATE: для приёмки НОВОЙ трубы укажите сертификат качества (№, завод, плавка / PDF) или отметьте «Карантин»!");
+        }
 
         cart.push({
           isNew: true,
+          mtc: newMtc,
+          allowQuarantine: newQuarantine,
           name: `Труба ${d}х${w}`,
           docName: `Труба ${d}х${w}`,
           diam: parseFloat(d),
@@ -1007,6 +1060,8 @@
           cost: Math.round((buyPr > 0 ? buyPr : sellPr) * tn),
           margin: 0
         });
+        document.getElementById("newMtcInput").value = "";
+        document.getElementById("newMtcQuarantine").checked = false;
         toggleNewForm(false);
       } else if (currentMode === 'restore') {
         if (selectedIdx === null) return alert("Выберите трубу Б/у для отправки в восстановление!");
@@ -1076,12 +1131,26 @@
           return alert(`СТОП-ЛОСС! Цена (${dealPriceTn} ₽) дает маржу ${Math.round(effectiveMarginPerStockTn)} ₽/тн (ниже порога ${p.minMarginPerTon || 3000} ₽/тн)!`);
         }
 
+        let addMtc = '';
+        let addQuarantine = false;
+        if (currentMode === 'add' && (p.condition || '').toLowerCase().includes('нов')) {
+          addMtc = (document.getElementById("addMtcInput").value || "").trim();
+          addQuarantine = document.getElementById("addMtcQuarantine").checked;
+          if (!addMtc && !addQuarantine) {
+            return alert("MTC GATE: для приёмки НОВОЙ трубы укажите сертификат качества (№, завод, плавка / PDF) или отметьте «Карантин»!");
+          }
+          document.getElementById("addMtcInput").value = "";
+          document.getElementById("addMtcQuarantine").checked = false;
+        }
+
         if (currentMode === 'deduct' && m > p.stockM) {
           if (!confirm(`На складе всего ${p.stockM} м. Запрошено ${m} м. Списать в минус?`)) return;
         }
 
         cart.push({
           isNew: false,
+          mtc: addMtc,
+          allowQuarantine: addQuarantine,
           rowIndex: p.rowIndex,
           name: p.name,
           docName: (currentMode === 'deduct' && ph) ? ph.docTitle : p.name,

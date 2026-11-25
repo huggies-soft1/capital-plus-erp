@@ -207,7 +207,13 @@ function handleCallingSheetEdit(e, sheet) {
     return;
   }
 
-  if (isSheetWithStockMonitor_(sheetName) && (col === 7 || col === 9 || col === 10 || col === 14)) {
+  if (col === 9) {
+    updateSingleRowNeedHighlight_(sheet, row);
+    if (isSheetWithStockMonitor_(sheetName)) refreshSingleRowTactic_(sheet, row);
+    return;
+  }
+
+  if (isSheetWithStockMonitor_(sheetName) && (col === 7 || col === 10 || col === 14)) {
     refreshSingleRowTactic_(sheet, row);
     return;
   }
@@ -682,9 +688,10 @@ function updateSingleRowNeedHighlight_(sheet, row, needVal) {
     return;
   }
 
-  const stockByDiam = getAvailableStockDiamsMap_(sheet.getParent());
-  const liveDiams = extractCleanPipeDiams_(str).filter(d => stockByDiam[d]);
-  cell.setBackground(liveDiams.length > 0 ? '#dcfce7' : null);
+  const pipeType = String(sheet.getRange(row, 9).getValue() || '').trim();
+  const stockEntriesMap = getAvailableStockEntriesMap_(sheet.getParent());
+  const match = matchNeedAgainstStock_(str, pipeType, stockEntriesMap);
+  cell.setBackground(match.fullMatches.length > 0 ? '#dcfce7' : null);
 }
 
 function cleanupRowIfCompletelyEmpty_(sheet, row, sheetName) {
@@ -1191,36 +1198,97 @@ function syncUnpackedNotesOnSheetSilent_(sheet) {
 // ЧИСТЫЙ МОНИТОР СКЛАДА И ПРАЙСА (КОЛОНКА O В «3. ЛИСТ ОЖИДАНИЯ» И «2. КИТЫ»)
 // =================================================================
 
-function getAvailableStockDiamsMap_(ss) {
+const STOCK_TAIL_THRESHOLD_TN_ = 1.0;
+
+function doesStockMatchClientPipeType_(stockCondRaw, stockCatRaw, clientPipeTypeRaw) {
+  const req = String(clientPipeTypeRaw || '').toLowerCase().trim();
+  if (!req || req === '—' || req === '-' || req === 'любая' || req === 'любой') return true;
+
+  const stCond = String(stockCondRaw || '').toLowerCase();
+  const stCat = String(stockCatRaw || '').toLowerCase();
+
+  const isStNkt = stCat.includes('нкт') || stCond.includes('нкт');
+  const isStNew = stCond.includes('нов');
+  const isStStale = stCond.includes('леж');
+  const isStRest = stCond.includes('восст');
+  const isStUsed = stCond.includes('б/у') || stCond.includes('бу');
+
+  const reqNew = req.includes('нов');
+  const reqStale = req.includes('леж');
+  const reqRest = req.includes('восст');
+  const reqUsed = req.includes('б/у') || /\bбу\b/.test(req);
+  const reqNkt = req.includes('нкт');
+
+  if (!reqNew && !reqStale && !reqRest && !reqUsed && !reqNkt) return true;
+
+  return (
+    (reqNew && isStNew) ||
+    (reqStale && isStStale) ||
+    (reqRest && isStRest) ||
+    (reqUsed && isStUsed) ||
+    (reqNkt && isStNkt)
+  );
+}
+
+function getAvailableStockEntriesMap_(ss) {
   const whSheet = typeof getWarehouseSheet_ === 'function' ? getWarehouseSheet_(ss) : getSheetByNameSafe(ss, 'Склад');
   const stockByDiam = {};
   if (!whSheet || whSheet.getLastRow() < 3) return stockByDiam;
 
   const whData = whSheet.getRange(3, 1, whSheet.getLastRow() - 2, 12).getValues();
   whData.forEach(r => {
-    const status  = String(r[9] || '').trim().toLowerCase();
+    const status = String(r[9] || '').trim().toLowerCase();
     const stockTn = typeof safeParseFloat === 'function' ? safeParseFloat(r[10]) : parseFloat(r[10]) || 0;
-    const stockM  = typeof safeParseFloat === 'function' ? safeParseFloat(r[11]) : parseFloat(r[11]) || 0;
-    const diam    = Math.round(typeof safeParseFloat === 'function' ? safeParseFloat(r[3]) : parseFloat(r[3]) || 0);
-    const wall    = typeof safeParseFloat === 'function' ? safeParseFloat(r[4]) : parseFloat(r[4]) || 0;
+    const stockM = typeof safeParseFloat === 'function' ? safeParseFloat(r[11]) : parseFloat(r[11]) || 0;
+    const diam = Math.round(typeof safeParseFloat === 'function' ? safeParseFloat(r[3]) : parseFloat(r[3]) || 0);
+    const wall = typeof safeParseFloat === 'function' ? safeParseFloat(r[4]) : parseFloat(r[4]) || 0;
+    const catRaw = String(r[0] || '').trim();
     const condRaw = String(r[2] || '').trim();
     const priceTn = Math.round(typeof safeParseFloat === 'function' ? safeParseFloat(r[7]) : parseFloat(r[7]) || 0);
 
-    if (status !== 'нет' && (stockTn > 0 || stockM > 0) && diam > 0) {
-      if (!stockByDiam[diam]) stockByDiam[diam] = [];
-      let condShort = 'Б/у';
-      const cl = condRaw.toLowerCase();
-      if (cl.includes('восст')) condShort = 'Восст.';
-      else if (cl.includes('леж')) condShort = 'Леж.';
-      else if (cl.includes('нкт')) condShort = 'НКТ';
-      else if (cl.includes('нов')) condShort = 'Нов.';
+    if (status === 'нет' || status.includes('карантин')) return;
+    if ((stockTn <= 0 && stockM <= 0) || diam <= 0) return;
 
-      const qtyStr = stockTn > 0 ? `${Number(stockTn.toFixed(1))}т` : `${Math.round(stockM)}м`;
-      const prStr  = priceTn > 0 ? ` — ${priceTn.toLocaleString('ru-RU')} ₽` : '';
-      stockByDiam[diam].push(`${diam}х${wall} ${condShort} (${qtyStr}${prStr})`);
+    if (!stockByDiam[diam]) stockByDiam[diam] = [];
+
+    let condShort = 'Б/у';
+    const cl = condRaw.toLowerCase();
+    if (catRaw.toLowerCase().includes('нкт') || cl.includes('нкт')) condShort = 'НКТ';
+    else if (cl.includes('восст')) condShort = 'Восст.';
+    else if (cl.includes('леж')) condShort = 'Леж.';
+    else if (cl.includes('нов')) condShort = 'Нов.';
+
+    const isTail = stockTn > 0 && stockTn < STOCK_TAIL_THRESHOLD_TN_;
+    const qtyStr = stockTn > 0 ? `${Number(stockTn.toFixed(1))}т` : `${Math.round(stockM)}м`;
+    const prStr = priceTn > 0 ? ` — ${priceTn.toLocaleString('ru-RU')} ₽` : '';
+
+    stockByDiam[diam].push({
+      diam: diam,
+      wall: wall,
+      category: catRaw,
+      condRaw: condRaw,
+      condShort: condShort,
+      stockTn: stockTn,
+      stockM: stockM,
+      priceTn: priceTn,
+      isTail: isTail,
+      label: `${diam}х${wall} ${condShort} (${qtyStr}${prStr})`
+    });
+  });
+
+  return stockByDiam;
+}
+
+function getAvailableStockDiamsMap_(ss) {
+  const entriesMap = getAvailableStockEntriesMap_(ss);
+  const strMap = {};
+  Object.keys(entriesMap).forEach(d => {
+    const fullItems = entriesMap[d].filter(it => !it.isTail);
+    if (fullItems.length > 0) {
+      strMap[d] = fullItems.map(it => it.label);
     }
   });
-  return stockByDiam;
+  return strMap;
 }
 
 function extractCleanPipeDiams_(text) {
@@ -1232,15 +1300,42 @@ function extractCleanPipeDiams_(text) {
     .filter(d => STANDARD_PIPE_DIAMS_.includes(d));
 }
 
-function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
-  const need    = String(rowVals[7] || '').trim();
-  const notes   = String(rowVals[10] || '').trim();
+function matchNeedAgainstStock_(needStr, pipeTypeStr, stockEntriesMap) {
+  const liveDiams = extractCleanPipeDiams_(needStr);
+  const fullMatches = [];
+  const tailMatches = [];
+  const missingDiams = [];
+
+  liveDiams.forEach(d => {
+    const items = (stockEntriesMap[d] || []).filter(it =>
+      doesStockMatchClientPipeType_(it.condRaw, it.category, pipeTypeStr)
+    );
+    const full = items.filter(it => !it.isTail);
+    const tails = items.filter(it => it.isTail);
+
+    if (full.length > 0) {
+      fullMatches.push(full.map(it => it.label).join(', '));
+    } else if (tails.length > 0) {
+      tailMatches.push(tails.map(it => it.label).join(', '));
+      missingDiams.push(d);
+    } else {
+      missingDiams.push(d);
+    }
+  });
+
+  return { liveDiams, fullMatches, tailMatches, missingDiams };
+}
+
+function computeDynamicTacticForRow_(rowVals, stockEntriesMap, companyDossierNote) {
+  const need = String(rowVals[7] || '').trim();
+  const pipeType = String(rowVals[8] || '').trim();
+  const notes = String(rowVals[10] || '').trim();
   const history = String(rowVals[13] || '').trim();
   const s1cInfo = rowVals.length >= 19 ? String(rowVals[18] || '').trim() : '';
   const dossier = String(companyDossierNote || '').trim();
 
   const allContext = `${notes} ${dossier} ${history}`;
-  const allLower   = allContext.toLowerCase();
+  const allLower = allContext.toLowerCase();
 
   const needLower = need.toLowerCase();
   const hasActiveNeed = need !== '' && needLower !== 'нет' && needLower !== '—' && needLower !== '-';
@@ -1255,25 +1350,30 @@ function computeDynamicTacticForRow_(rowVals, stockByDiam, companyDossierNote) {
     return `Выставлен счет${targetPipe}${scaleTag}`;
   }
 
-  // 2. Живая заявка в H — прямая сверка со Складом
+  // 2. Живая заявка в H — строгая сверка со Складом по Типу трубы (I) и порогу >= 1 тн
   if (hasActiveNeed) {
-    const liveDiams = extractCleanPipeDiams_(need);
-    const matches = [];
-    liveDiams.forEach(d => {
-      if (stockByDiam[d]) matches.push(stockByDiam[d].join(', '));
-    });
+    const match = matchNeedAgainstStock_(need, pipeType, stockEntriesMap);
+    const typeTag = pipeType ? ` (${pipeType})` : '';
 
-    if (matches.length > 0) {
-      return `В НАЛИЧИИ ПОД ЗАЯВКУ: ${matches.join(' | ')}${scaleTag}`;
+    if (match.fullMatches.length > 0) {
+      const defSuffix = match.missingDiams.length > 0
+        ? ` | Дефицит в Закупки: Ø ${match.missingDiams.join(', ')}`
+        : '';
+      return `В НАЛИЧИИ ПОД ЗАЯВКУ: ${match.fullMatches.join(' | ')}${defSuffix}${scaleTag}`;
     }
-    return `НЕТ НА СКЛАДЕ (в Закупки: ${need})${scaleTag}`;
+    if (match.tailMatches.length > 0) {
+      return `ТОЛЬКО ХВОСТ <1т: ${match.tailMatches.join(' | ')} (в Закупки: ${need}${typeTag})${scaleTag}`;
+    }
+    return `НЕТ НА СКЛАДЕ (в Закупки: ${need}${typeTag})${scaleTag}`;
   }
 
-  // 3. Если в H стоит «Нет» — радар ревизии: сверка профиля 1С (S) со Складом + возраст Прайса/КП и Напоминалки
+  // 3. Если в H стоит «Нет» — сверка профиля отгрузок (S) со Складом (>= 1 тн) + возраст КП
   const statusParts = [];
 
   if (s1cInfo) {
-    const s1cDiams = extractCleanPipeDiams_(s1cInfo).filter(d => stockByDiam[d]);
+    const s1cDiams = extractCleanPipeDiams_(s1cInfo).filter(d =>
+      (stockEntriesMap[d] || []).some(it => !it.isTail)
+    );
     if (s1cDiams.length > 0) {
       statusParts.push(`Склад под отгрузки: Ø ${s1cDiams.slice(0, 4).join(', ')}`);
     }
@@ -1331,6 +1431,9 @@ function computeTacticStyle_(tacticText) {
   if (up.includes('ВЫСТАВЛЕН СЧЕТ') || up.includes('ВЫСТАВЛЕН СЧЁТ')) {
     return { bg: '#dbeafe', color: '#1e40af', weight: 'bold' };
   }
+  if (up.includes('ТОЛЬКО ХВОСТ')) {
+    return { bg: '#fef3c7', color: '#92400e', weight: 'bold' };
+  }
   if (up.includes('НЕТ НА СКЛАДЕ')) {
     return { bg: '#fee2e2', color: '#991b1b', weight: 'bold' };
   }
@@ -1358,9 +1461,9 @@ function refreshSingleRowTactic_(sheet, row) {
     return;
   }
   const ss = sheet.getParent();
-  const stockByDiam = getAvailableStockDiamsMap_(ss);
+  const stockEntriesMap = getAvailableStockEntriesMap_(ss);
   const dossierNote = sheet.getRange(row, 2).getNote();
-  const tactic = computeDynamicTacticForRow_(rowVals, stockByDiam, dossierNote);
+  const tactic = computeDynamicTacticForRow_(rowVals, stockEntriesMap, dossierNote);
   const st = computeTacticStyle_(tactic);
   tacticCell.setValue(tactic).setBackground(st.bg).setFontColor(st.color).setFontWeight(st.weight);
 }
@@ -1443,9 +1546,9 @@ function buildNeedSnapshot_(need, pipeType, application, customPrefix) {
 
 function matchWarehouseWithWaitingList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const stockByDiam = getAvailableStockDiamsMap_(ss);
+  const stockEntriesMap = getAvailableStockEntriesMap_(ss);
 
-  if (Object.keys(stockByDiam).length === 0) {
+  if (Object.keys(stockEntriesMap).length === 0) {
     ss.toast('На складе нет позиций со статусом «В наличии».', '⚠️ Нет остатков', 4);
     return;
   }
@@ -1471,22 +1574,23 @@ function matchWarehouseWithWaitingList() {
       const comp    = String(r[1] || '').trim();
       const lpr     = String(r[3] || '').trim();
       const ph      = String(r[4] || '').trim().split('\n')[0];
-      const needStr = String(r[7] || '').trim();
-      const notes   = String(r[10] || '').trim();
-      const histStr = String(r[13] || '').trim();
-      const s1cStr  = readCols >= 19 ? String(r[18] || '').trim() : '';
-      const dossier = String((compNotes[idx] && compNotes[idx][0]) || '').trim();
+      const needStr     = String(r[7] || '').trim();
+      const pipeTypeStr = String(r[8] || '').trim();
+      const notes       = String(r[10] || '').trim();
+      const histStr     = String(r[13] || '').trim();
+      const s1cStr      = readCols >= 19 ? String(r[18] || '').trim() : '';
+      const dossier     = String((compNotes[idx] && compNotes[idx][0]) || '').trim();
 
-      tacticsCol.push([computeDynamicTacticForRow_(r, stockByDiam, dossier)]);
+      tacticsCol.push([computeDynamicTacticForRow_(r, stockEntriesMap, dossier)]);
 
       const isNeedActive = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
 
       if (isNeedActive) {
-        const liveDiams = extractCleanPipeDiams_(needStr).filter(d => stockByDiam[d]);
-        if (liveDiams.length > 0) {
+        const match = matchNeedAgainstStock_(needStr, pipeTypeStr, stockEntriesMap);
+        if (match.fullMatches.length > 0) {
           needBgColors.push(['#dcfce7']);
           hotMatches.push(
-            `🔥 [${sName.replace(/^\d+\.\s*/, '')}] ${comp || 'Клиент'} (${lpr || ph}): сейчас в заявке Ø ${liveDiams.join(', ')}`
+            `🔥 [${sName.replace(/^\d+\.\s*/, '')}] ${comp || 'Клиент'} (${lpr || ph}): сейчас в заявке ${needStr}${pipeTypeStr ? ' (' + pipeTypeStr + ')' : ''}`
           );
           return;
         }
@@ -1495,7 +1599,9 @@ function matchWarehouseWithWaitingList() {
       needBgColors.push([null]);
 
       const combinedPast = `${histStr} ${notes} ${dossier} ${s1cStr}`;
-      const pastDiams = extractCleanPipeDiams_(combinedPast).filter(d => stockByDiam[d]);
+      const pastDiams = extractCleanPipeDiams_(combinedPast).filter(d =>
+        (stockEntriesMap[d] || []).some(it => !it.isTail)
+      );
 
       if (pastDiams.length > 0) {
         historyMatches.push(
@@ -2183,7 +2289,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
   const fullRange = sheet.getRange(2, 1, numRows, numCols);
   const allValues = fullRange.getValues();
   const allNotes  = fullRange.getNotes();
-  const stockByDiam = getAvailableStockDiamsMap_(ss);
+  const stockEntriesMap = getAvailableStockEntriesMap_(ss);
 
   const items = [];
   let hasStringDatesToConvert = false;
@@ -2241,7 +2347,7 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     }
 
     if (hasMonitor) {
-      const newTactic = computeDynamicTacticForRow_(r, stockByDiam, n[1]);
+      const newTactic = computeDynamicTacticForRow_(r, stockEntriesMap, n[1]);
       if (String(r[14] || '') !== newTactic) tacticsChanged = true;
       r[14] = newTactic;
     }
@@ -2358,8 +2464,9 @@ function sortAndHighlightDeadlinesOnSheet_(sheet) {
     const needStr = String(it.values[7] || '').trim();
     const isAct = needStr !== '' && needStr.toLowerCase() !== 'нет' && needStr !== '—' && needStr !== '-';
     if (isAct) {
-      const liveDiams = extractCleanPipeDiams_(needStr).filter(d => stockByDiam[d]);
-      needBgs.push([liveDiams.length > 0 ? '#dcfce7' : null]);
+      const pipeTypeStr = String(it.values[8] || '').trim();
+      const match = matchNeedAgainstStock_(needStr, pipeTypeStr, stockEntriesMap);
+      needBgs.push([match.fullMatches.length > 0 ? '#dcfce7' : null]);
     } else {
       needBgs.push([null]);
     }
@@ -2412,29 +2519,35 @@ function openReverseRadarForActivePipe() {
 
   let targetDiam = 0;
   let sourceLabel = '';
+  let sourceCond = '';
+  let sourceCat = '';
 
   const isWh = sheetName.toLowerCase().replace(/^\d+\.\s*/, '').trim() === 'склад';
   const isSup = sheetName.toLowerCase().replace(/^\d+\.\s*/, '').trim() === 'закупки';
 
   if (isWh && row >= 3) {
-    const dVal = Math.round(safeParseFloat(sheet.getRange(row, 4).getValue()));
-    const nameVal = String(sheet.getRange(row, 2).getValue() || '').trim();
+    const whRow = sheet.getRange(row, 1, 1, 4).getValues()[0];
+    sourceCat = String(whRow[0] || '').trim();
+    const nameVal = String(whRow[1] || '').trim();
+    sourceCond = String(whRow[2] || '').trim();
+    const dVal = Math.round(safeParseFloat(whRow[3]));
     if (dVal > 0) {
       targetDiam = dVal;
-      sourceLabel = nameVal || (`Ø ${dVal}`);
+      sourceLabel = `${nameVal || ('Ø ' + dVal)}${sourceCond ? ' (' + sourceCond + ')' : ''}`;
     } else if (nameVal) {
       const diams = extractCleanPipeDiams_(nameVal);
       if (diams.length > 0) {
         targetDiam = diams[0];
-        sourceLabel = nameVal;
+        sourceLabel = `${nameVal}${sourceCond ? ' (' + sourceCond + ')' : ''}`;
       }
     }
   } else if (isSup && row >= 2) {
     const sizeVal = String(sheet.getRange(row, 4).getValue() || '').trim();
+    sourceCond = String(sheet.getRange(row, 5).getValue() || '').trim();
     const diams = extractCleanPipeDiams_(sizeVal);
     if (diams.length > 0) {
       targetDiam = diams[0];
-      sourceLabel = `Закупка ${sizeVal}`;
+      sourceLabel = `Закупка ${sizeVal}${sourceCond ? ' (' + sourceCond + ')' : ''}`;
     }
   }
 
@@ -2478,8 +2591,9 @@ function openReverseRadarForActivePipe() {
       const lpr     = String(r[3] || '').trim().split('\n')[0];
       const phone   = String(r[4] || '').trim().split('\n')[0];
       const email   = String(r[5] || '').trim().split(/[\n,;]+/)[0];
-      const needH   = String(r[7] || '').trim();
-      const notesK  = String(r[10] || '').trim();
+      const needH     = String(r[7] || '').trim();
+      const pipeTypeI = String(r[8] || '').trim();
+      const notesK    = String(r[10] || '').trim();
       const histN   = String(r[13] || '').trim();
       const segP    = numCols >= 16 ? String(r[15] || '').trim() : '';
       const tonsQ   = numCols >= 17 ? parseWhaleMetricNumber_(r[16]) : 0;
@@ -2491,10 +2605,13 @@ function openReverseRadarForActivePipe() {
       const diamsH = hasActiveNeed ? extractCleanPipeDiams_(needH) : [];
 
       if (diamsH.includes(targetDiam)) {
+        if (sourceCond && !doesStockMatchClientPipeType_(sourceCond, sourceCat, pipeTypeI)) {
+          return;
+        }
         hotList.push({
           sheet: shortSheet, row: rowNum, isWhale, comp, city, lpr, phone, email,
           seg: segP, tons: tonsQ, rev: revR,
-          reason: `Живая заявка (H): ${needH}`
+          reason: `Живая заявка (H): ${needH}${pipeTypeI ? ' [' + pipeTypeI + ']' : ''}`
         });
         return;
       }

@@ -186,7 +186,8 @@ function sortWarehouseData() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 3) return;
 
-  const range = sheet.getRange(3, 1, lastRow - 2, 15);
+  const numCols = Math.max(15, sheet.getLastColumn());
+  const range = sheet.getRange(3, 1, lastRow - 2, numCols);
   range.sort([
     {column: 4, ascending: true},
     {column: 5, ascending: true}

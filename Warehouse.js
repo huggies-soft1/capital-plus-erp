@@ -69,6 +69,25 @@ function extractActualWallFromNotes_(notesStr, nominalWall) {
 /**
  * Быстрое чтение склада за 1 обращение к листу (A3:O)
  */
+function ensureWarehouseMtcColumn_(sheet) {
+  if (!sheet) return;
+  if (sheet.getMaxColumns() < 16) {
+    sheet.insertColumnAfter(15);
+  }
+  const pHeader = sheet.getRange(2, 16);
+  if (String(pHeader.getValue() || '').trim() !== 'Сертификат (MTC)') {
+    sheet.getRange(2, 15).copyTo(pHeader, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    pHeader.setValue('Сертификат (MTC)');
+    sheet.setColumnWidth(16, 220);
+  }
+  const lastRow = Math.max(sheet.getLastRow(), 60);
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['В наличии', 'Нет', 'Карантин (Нет MTC)'], true)
+    .setAllowInvalid(true)
+    .build();
+  sheet.getRange(3, 10, lastRow - 2, 1).setDataValidation(statusRule);
+}
+
 function getPipesData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getWarehouseSheet_(ss);
@@ -77,7 +96,8 @@ function getPipesData() {
   const lastRow = sheet.getLastRow();
   if (lastRow < 3) return [];
 
-  const values = sheet.getRange(3, 1, lastRow - 2, 15).getValues();
+  const readCols = Math.min(16, sheet.getMaxColumns());
+  const values = sheet.getRange(3, 1, lastRow - 2, readCols).getValues();
 
   return values.map((row, idx) => {
     const rawName = (row[1] || '').toString().trim(); // B
@@ -102,7 +122,8 @@ function getPipesData() {
       status: (row[9] || '').toString().trim(),       // J: Наличие
       stockTn: safeParseFloat(row[10]),               // K: Остаток тн
       stockM: safeParseFloat(row[11]),                // L: Остаток м
-      notes: notes,                                   // N: Примечания
+      notes: notes,                                                        // N: Примечания
+      mtc: readCols >= 16 ? (row[15] || '').toString().trim() : '',        // P: Сертификат (MTC)
       weightPerMeterKg: weightPerMeterKg,
       minMarginPerTon: MIN_MARGIN_PER_TON
     };
@@ -233,72 +254,110 @@ function executeBatchAddition(cartItems) {
   const sheet = getWarehouseSheet_(ss);
   if (!sheet) throw new Error("Лист «5. Склад» («Склад») не найден!");
 
+  ensureWarehouseMtcColumn_(sheet);
+
   let report = [];
   const now = new Date();
+  const dateStamp = Utilities.formatDate(now, ss.getSpreadsheetTimeZone() || 'Europe/Moscow', 'dd.MM.yyyy');
 
   cartItems.forEach(item => {
-    let row;
+    const isNewPipeCond = String(item.condition || '').toLowerCase().includes('нов');
+    const incomingMtc = String(item.mtc || '').trim();
+    const allowQuarantine = Boolean(item.allowQuarantine);
 
-    if (item.isNew) {
-      row = sheet.getLastRow() + 1;
+    // 1. Анти-дубль при создании новой позиции
+    let targetExistingRow = item.isNew ? -1 : item.rowIndex;
+    if (item.isNew && sheet.getLastRow() >= 3) {
+      const existingData = sheet.getRange(3, 1, sheet.getLastRow() - 2, 5).getValues();
+      const dTarget = safeParseFloat(item.diam);
+      const wTarget = safeParseFloat(item.wall);
+      const cTarget = String(item.condition || '').trim().toLowerCase();
+      const catTarget = String(item.category || '').trim().toLowerCase();
+      for (let r = 0; r < existingData.length; r++) {
+        if (
+          safeParseFloat(existingData[r][3]) === dTarget &&
+          safeParseFloat(existingData[r][4]) === wTarget &&
+          String(existingData[r][2] || '').trim().toLowerCase() === cTarget &&
+          String(existingData[r][0] || '').trim().toLowerCase() === catTarget
+        ) {
+          targetExistingRow = r + 3;
+          break;
+        }
+      }
+    }
 
+    // 2. MTC GATE (п. 4.10 ТЗ): для новой трубы при приёмке обязателен сертификат или Карантин
+    if (isNewPipeCond && !incomingMtc && !allowQuarantine) {
+      throw new Error(
+        `MTC GATE: для приёмки НОВОЙ трубы «${item.name}» обязательно укажите сертификат качества ` +
+        `(№ сертификата, завод, плавка / PDF) или отметьте «В Карантин (Нет MTC)»!`
+      );
+    }
+
+    const existingMtcOnRow = targetExistingRow >= 3
+      ? String(sheet.getRange(targetExistingRow, 16).getValue() || '').trim()
+      : '';
+    const finalStatus = (isNewPipeCond && !incomingMtc && allowQuarantine)
+      ? 'Карантин (Нет MTC)'
+      : 'В наличии';
+    const statusBg = finalStatus === 'Карантин (Нет MTC)' ? '#fef3c7' : null;
+    const mtcEntry = incomingMtc ? `[${dateStamp}] ${incomingMtc}` : '';
+
+    if (targetExistingRow === -1) {
+      const row = sheet.getLastRow() + 1;
       const diam = safeParseFloat(item.diam);
       const wall = safeParseFloat(item.wall);
       if (diam <= 0 || wall <= 0) throw new Error(`Ошибка геометрии у ${item.name}`);
 
       const weightPerMeterTn = ((diam - wall) * wall * 0.0246615) / 1000;
-      const buyPriceTn  = safeParseFloat(item.buyPriceTn);
+      const buyPriceTn = safeParseFloat(item.buyPriceTn);
       const sellPriceTn = safeParseFloat(item.priceTn) || (buyPriceTn > 0 ? buyPriceTn + MIN_MARGIN_PER_TON : 0);
-      const addTn       = safeParseFloat(item.tons);
-      const addM        = Math.max(0, Math.round((addTn / weightPerMeterTn) * 10) / 10);
-      const gostValue   = item.gost ? item.gost : "—";
-      const cleanName   = formatCleanPipeTitle_(item.name);
+      const addTn = safeParseFloat(item.tons);
+      const addM = Math.max(0, Math.round((addTn / weightPerMeterTn) * 10) / 10);
+      const gostValue = item.gost ? item.gost : "—";
+      const cleanName = formatCleanPipeTitle_(item.name);
 
-      sheet.getRange(row, 1).setValue(item.category);  // A
-      sheet.getRange(row, 2).setValue(cleanName);      // B
-      sheet.getRange(row, 3).setValue(item.condition); // C
-      sheet.getRange(row, 4).setValue(diam);           // D
-      sheet.getRange(row, 5).setValue(wall);           // E
-      sheet.getRange(row, 6).setValue(gostValue);      // F
+      sheet.getRange(row, 1).setValue(item.category);
+      sheet.getRange(row, 2).setValue(cleanName);
+      sheet.getRange(row, 3).setValue(item.condition);
+      sheet.getRange(row, 4).setValue(diam);
+      sheet.getRange(row, 5).setValue(wall);
+      sheet.getRange(row, 6).setValue(gostValue);
 
-      if (buyPriceTn > 0) {
-        sheet.getRange(row, 7).setValue(buyPriceTn);   // G: Закупка
-      }
+      if (buyPriceTn > 0) sheet.getRange(row, 7).setValue(buyPriceTn);
       if (sellPriceTn > 0) {
-        sheet.getRange(row, 8).setValue(sellPriceTn);  // H: Продажа тн
-        if (weightPerMeterTn > 0) {
-          sheet.getRange(row, 9).setValue(Math.round(sellPriceTn * weightPerMeterTn)); // I: Продажа м
-        }
-        sheet.getRange(row, 13).setValue(Math.round(sellPriceTn * addTn)); // M: Сумма
+        sheet.getRange(row, 8).setValue(sellPriceTn);
+        if (weightPerMeterTn > 0) sheet.getRange(row, 9).setValue(Math.round(sellPriceTn * weightPerMeterTn));
+        sheet.getRange(row, 13).setValue(Math.round(sellPriceTn * addTn));
       }
 
-      sheet.getRange(row, 10).setValue("В наличии");   // J: Наличие
-      sheet.getRange(row, 11).setValue(addTn);         // K: Остаток тн
-      sheet.getRange(row, 12).setValue(addM);          // L: Остаток м
-      if (item.notes) {
-        sheet.getRange(row, 14).setValue(item.notes);  // N: Примечания
-      }
+      sheet.getRange(row, 10).setValue(finalStatus);
+      sheet.getRange(row, 11).setValue(addTn);
+      sheet.getRange(row, 12).setValue(addM);
+      if (item.notes) sheet.getRange(row, 14).setValue(item.notes);
+      if (mtcEntry) sheet.getRange(row, 16).setValue(mtcEntry);
 
       formatNewWarehouseRow_(sheet, row, diam, wall, now);
-      report.push(`+ НОВАЯ: ${cleanName} (${item.condition}, ${gostValue}) — ${addTn.toFixed(3)} тн`);
+      if (statusBg) sheet.getRange(row, 10).setBackground(statusBg);
+      report.push(`+ НОВАЯ: ${cleanName} (${item.condition}, ${finalStatus}) — ${addTn.toFixed(3)} тн`);
     } else {
-      row = item.rowIndex;
-      const actualName = sheet.getRange(row, 2).getValue().toString().trim();
-
-      if (normalizePipeName(actualName) !== normalizePipeName(item.name)) {
-        throw new Error(`Позиция в строке ${row} изменилась (ожидалась "${item.name}"). Обновите окно.`);
+      const row = targetExistingRow;
+      if (!item.isNew) {
+        const actualName = sheet.getRange(row, 2).getValue().toString().trim();
+        if (normalizePipeName(actualName) !== normalizePipeName(item.name)) {
+          throw new Error(`Позиция в строке ${row} изменилась (ожидалась "${item.name}"). Обновите окно.`);
+        }
       }
 
-      const currentM  = safeParseFloat(sheet.getRange(row, 12).getValue()); // L
-      const currentTn = safeParseFloat(sheet.getRange(row, 11).getValue()); // K
-      const addTn     = safeParseFloat(item.tons);
-
+      const currentM = safeParseFloat(sheet.getRange(row, 12).getValue());
+      const currentTn = safeParseFloat(sheet.getRange(row, 11).getValue());
+      const addTn = safeParseFloat(item.tons);
       const diam = safeParseFloat(sheet.getRange(row, 4).getValue());
       const wall = safeParseFloat(sheet.getRange(row, 5).getValue());
       const weightPerMeterTn = ((diam - wall) * wall * 0.0246615) / 1000;
 
-      const addM  = Math.max(0, Math.round((addTn / weightPerMeterTn) * 10) / 10);
-      const newM  = Math.max(0, Math.round((currentM + addM) * 10) / 10);
+      const addM = Math.max(0, Math.round((addTn / weightPerMeterTn) * 10) / 10);
+      const newM = Math.max(0, Math.round((currentM + addM) * 10) / 10);
       const newTn = Math.round(newM * weightPerMeterTn * 100) / 100;
 
       const incomingBuyTn = safeParseFloat(item.buyPriceTn);
@@ -308,20 +367,23 @@ function executeBatchAddition(cartItems) {
           ? Math.round(((oldBuyTn * currentTn) + (incomingBuyTn * addTn)) / (currentTn + addTn))
           : Math.round(incomingBuyTn);
         sheet.getRange(row, 7).clearDataValidations();
-        sheet.getRange(row, 7).setValue(weightedBuy); // G: Закупка
+        sheet.getRange(row, 7).setValue(weightedBuy);
       }
 
-      sheet.getRange(row, 12).setValue(newM);        // L
-      sheet.getRange(row, 11).setValue(newTn);       // K
-      sheet.getRange(row, 10).setValue('В наличии'); // J
+      sheet.getRange(row, 12).setValue(newM);
+      sheet.getRange(row, 11).setValue(newTn);
+      sheet.getRange(row, 10).setValue(finalStatus).setBackground(statusBg);
 
-      const currentPriceTn = safeParseFloat(sheet.getRange(row, 8).getValue()); // H
-      if (currentPriceTn > 0) {
-        sheet.getRange(row, 13).setValue(Math.round(currentPriceTn * newTn));   // M
+      if (mtcEntry) {
+        const mergedMtc = existingMtcOnRow ? `${mtcEntry}\n${existingMtcOnRow}` : mtcEntry;
+        sheet.getRange(row, 16).setValue(mergedMtc);
       }
 
-      sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm'); // O
-      report.push(`• ${item.name}: +${addTn.toFixed(3)} тн (Стало: ${newTn.toFixed(3)} тн)`);
+      const currentPriceTn = safeParseFloat(sheet.getRange(row, 8).getValue());
+      if (currentPriceTn > 0) sheet.getRange(row, 13).setValue(Math.round(currentPriceTn * newTn));
+      sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
+
+      report.push(`• ${item.name}: +${addTn.toFixed(3)} тн (Стало: ${newTn.toFixed(3)} тн | ${finalStatus})`);
     }
   });
 
@@ -473,8 +535,9 @@ function executeBatchRestore(cartItems) {
 function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
   const templateRow = 3;
 
-  sheet.getRange(templateRow, 1, 1, 15).copyTo(
-    sheet.getRange(row, 1, 1, 15),
+  const numCols = Math.min(16, Math.max(15, sheet.getMaxColumns()));
+  sheet.getRange(templateRow, 1, 1, numCols).copyTo(
+    sheet.getRange(row, 1, 1, numCols),
     SpreadsheetApp.CopyPasteType.PASTE_FORMAT,
     false
   );
@@ -489,7 +552,7 @@ function formatNewWarehouseRow_(sheet, row, diam, wall, now) {
   });
 
   sheet.getRange(row, 7).clearDataValidations();
-  sheet.getRange(row, 1, 1, 15).setBackground(null);
+  sheet.getRange(row, 1, 1, numCols).setBackground(null);
 
   sheet.getRange(row, 4, 1, 3).setHorizontalAlignment("center");
   sheet.getRange(row, 10, 1, 3).setHorizontalAlignment("center");
@@ -508,7 +571,8 @@ function cleanupWarehouseRowIfEmpty_(sheet, row) {
   const hasCoreData = vals.some((v, idx) => idx !== 9 && v !== null && v !== undefined && String(v).trim() !== '');
   if (hasCoreData) return false;
 
-  sheet.getRange(row, 1, 1, 15).clearContent().setBackground(null);
+  const clearCols = Math.min(16, sheet.getMaxColumns());
+  sheet.getRange(row, 1, 1, clearCols).clearContent().setBackground(null);
   return true;
 }
 
@@ -587,7 +651,7 @@ function handleWarehouseSheetEdit(e, sheet) {
       const currentFilter = sheet.getFilter();
       if (currentFilter && currentFilter.getRange().getLastRow() < row) {
         currentFilter.remove();
-        sheet.getRange(2, 1, row - 1, 15).createFilter();
+        sheet.getRange(2, 1, row - 1, Math.max(15, sheet.getLastColumn())).createFilter();
       }
     }
     return;
@@ -718,5 +782,28 @@ function handleWarehouseSheetEdit(e, sheet) {
     }
 
     sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
+    return;
+  }
+
+  // 4. MTC GATE при ручной смене статуса J (10) или добавлении сертификата P (16)
+  if (col === 10 || col === 16) {
+    const cond = String(sheet.getRange(row, 3).getValue() || '').toLowerCase();
+    const isNewCond = cond.includes('нов');
+    const mtcVal = sheet.getMaxColumns() >= 16 ? String(sheet.getRange(row, 16).getValue() || '').trim() : '';
+    const statusCell = sheet.getRange(row, 10);
+    const curStatus = String(statusCell.getValue() || '').trim();
+    const hasStock = safeParseFloat(sheet.getRange(row, 11).getValue()) > 0 || safeParseFloat(sheet.getRange(row, 12).getValue()) > 0;
+
+    if (col === 10 && isNewCond && curStatus === 'В наличии' && !mtcVal) {
+      statusCell.setValue('Карантин (Нет MTC)').setBackground('#fef3c7');
+      ss.toast('Для НОВОЙ трубы внесите сертификат в колонку P — пока переведено в «Карантин (Нет MTC)»!', 'MTC Gate', 6);
+      return;
+    }
+    if (col === 16 && mtcVal && curStatus.toLowerCase().includes('карантин') && hasStock) {
+      statusCell.setValue('В наличии').setBackground(null);
+      sheet.getRange(row, 15).setValue(now).setNumberFormat('dd.MM.yyyy HH:mm');
+      ss.toast('Сертификат внесён — партия снята с карантина и переведена в «В наличии»!', 'MTC Gate', 5);
+      return;
+    }
   }
 }

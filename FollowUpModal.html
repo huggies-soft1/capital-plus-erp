@@ -783,6 +783,9 @@
     function toggleCompanySelection(clientKey, forceAdd) {
       var c = rawClientsFromSheet.find(function(item) { return item.key === clientKey; });
       if (!c) return;
+      if (clientKey !== "__TEST_COMPANY__" && recipientStore["comp___TEST_COMPANY__"]) {
+        delete recipientStore["comp___TEST_COMPANY__"];
+      }
       var recId = "comp_" + c.key;
 
       if (recipientStore[recId] && !forceAdd) {
@@ -902,6 +905,7 @@
     }
 
     function selectAllVisibleWithEmail() {
+      delete recipientStore["comp___TEST_COMPANY__"];
       getFilteredClients_().forEach(function(c) {
         if (c.emailList && c.emailList.length > 0 && c.key !== "__TEST_COMPANY__") {
           toggleCompanySelection(c.key, true);

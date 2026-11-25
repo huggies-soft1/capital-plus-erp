@@ -1678,9 +1678,12 @@
         return;
       }
       var diamSet = {};
+      var allowedConds = [];
       clients.forEach(function(c) {
         (c.diams || []).forEach(function(d) { diamSet[String(d)] = true; });
+        if (c.pipeType) allowedConds.push(String(c.pipeType).toLowerCase());
       });
+      var reqCondStr = allowedConds.join(" ");
       var targetDiams = Object.keys(diamSet);
       if (targetDiams.length === 0) {
         showToast("У выбранного клиента в H, N и отгрузках (S) не найдено диаметров труб", "warn");
@@ -1691,7 +1694,28 @@
       var matchedCount = 0;
       document.querySelectorAll("tr.data-row").forEach(function(r) {
         var diamText = r.querySelectorAll(".col-center")[0].innerText.trim();
-        if (diamSet[diamText]) {
+        if (!diamSet[diamText]) return;
+
+        var condOk = true;
+        if (reqCondStr) {
+          var rowCond = (r.getAttribute("data-condition") || "").toLowerCase();
+          var rowCat = (r.querySelector(".tag-category").innerText || "").toLowerCase();
+          var rNew = reqCondStr.indexOf("нов") > -1;
+          var rStale = reqCondStr.indexOf("леж") > -1;
+          var rRest = reqCondStr.indexOf("восст") > -1;
+          var rUsed = reqCondStr.indexOf("б/у") > -1;
+          var rNkt = reqCondStr.indexOf("нкт") > -1;
+          if (rNew || rStale || rRest || rUsed || rNkt) {
+            condOk =
+              (rNew && rowCond.indexOf("нов") > -1) ||
+              (rStale && rowCond.indexOf("леж") > -1) ||
+              (rRest && rowCond.indexOf("восст") > -1) ||
+              (rUsed && rowCond.indexOf("б/у") > -1) ||
+              (rNkt && (rowCat.indexOf("нкт") > -1 || rowCond.indexOf("нкт") > -1));
+          }
+        }
+
+        if (condOk) {
           var chk = r.querySelector(".row-chk");
           if (chk) {
             chk.checked = true;
@@ -1871,9 +1895,16 @@
     function printFullOrSelectedWithLog() {
       var targetRows = collectTargetRows_();
       var diams = [];
+      var pricesList = [];
       targetRows.forEach(function(r) {
         var d = r.querySelectorAll(".col-center")[0].innerText.trim();
+        var w = r.querySelectorAll(".col-center")[1].innerText.trim();
+        var pTn = r.querySelector(".col-price-tn").innerText.trim();
         if (d && diams.indexOf(d) === -1) diams.push(d);
+        if (pricesList.length < 5) {
+          var condVal = (r.getAttribute("data-condition") || "").slice(0, 5);
+          pricesList.push(d + "х" + w + (condVal ? " " + condVal + "." : "") + " — " + pTn + "/т");
+        }
       });
 
       var clients = getActiveClientsPayload_();
@@ -1882,6 +1913,7 @@
           mode: "pdf",
           isFullPrice: targetRows.length > 15,
           diams: diams,
+          pricesBrief: (targetRows.length <= 5 ? pricesList.join(", ") : ""),
           clients: clients
         });
       }

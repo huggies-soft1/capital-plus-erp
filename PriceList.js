@@ -215,7 +215,7 @@ function getWarehouseGroupedData_(ss) {
     const stockTn = safeParseFloat(row[colStockTn]);
     const stockM = safeParseFloat(row[colStockM]);
 
-    if (rawStatus === 'нет') return;
+    if (rawStatus === 'нет' || rawStatus.includes('карантин')) return;
     if (stockTn <= 0 && stockM <= 0) return;
 
     const rawCategory = (row[colCategory] || 'ЭСВ').toString().trim();
@@ -590,9 +590,12 @@ function logClientPriceAction(payload) {
       const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
       targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-      const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+      const rawNextFollowUp = typeof getNextWorkingDateObj_ === 'function'
         ? getNextWorkingDateObj_(new Date(), 2)
         : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
+      const nextFollowUp = typeof getSmartBalancedDeadlineObj_ === 'function'
+        ? getSmartBalancedDeadlineObj_(targetSheet, rawNextFollowUp, timeZone, actualRow)
+        : rawNextFollowUp;
       const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
       const todayIso = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd");

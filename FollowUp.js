@@ -233,6 +233,9 @@ function parseFollowUp1CStats_(segP, tonsQ, revR, s1cInfo, now) {
         pipesPurchased = s.replace(/^\[[^\]]+\]\s*/, '').trim();
       }
     }
+    pipesPurchased = String(pipesPurchased || '')
+      .replace(/^(?:КП\+РЛ|КП|РЛ|1С)\s*(?:\([^)]*\))?\s*:?\s*/i, '')
+      .trim();
   }
 
   let partnerStatus = 'Действующий контрагент';
@@ -692,9 +695,12 @@ function logFollowUpClientAction(payload) {
       const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
       targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-      const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+      const rawNextFollowUp = typeof getNextWorkingDateObj_ === 'function'
         ? getNextWorkingDateObj_(new Date(), nextDays)
         : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + nextDays);
+      const nextFollowUp = typeof getSmartBalancedDeadlineObj_ === 'function'
+        ? getSmartBalancedDeadlineObj_(targetSheet, rawNextFollowUp, timeZone, actualRow)
+        : rawNextFollowUp;
       const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, 'yyyy-MM-dd');
       const todayIso = Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd');
       const curDeadline = targetSheet.getRange(actualRow, 12).getValue();
