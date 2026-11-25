@@ -285,9 +285,9 @@ function parseFollowUpHistoryStats_(historyRaw, now) {
   const quotedPrices = [];
 
   lines.forEach(line => {
-    if (/Прайс|КП|Напоминание|Напоминалка|Мессенджер|PDF/i.test(line)) {
+    if (!/Черновик/i.test(line) && /^\[(?:📧|💬|📄|📋)?\s*(?:Прайс|КП\b|Выгружен PDF|Напоминалка|Напоминание|Дожим)/i.test(line)) {
       kpCount++;
-      const dm = line.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      const dm = line.match(/-\s*(\d{2})\.(\d{2})\.(\d{4})(?:\s+\d{2}:\d{2})?\]$/) || line.match(/(\d{2})\.(\d{2})\.(\d{4})/);
       if (!lastKpDate && dm) {
         lastKpDate = `${dm[1]}.${dm[2]}.${dm[3]}`;
         const dt = new Date(parseInt(dm[3], 10), parseInt(dm[2], 10) - 1, parseInt(dm[1], 10));
@@ -513,9 +513,12 @@ ${userSignature.html}
             const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
             targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-            const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+            const rawNextFollowUp = typeof getNextWorkingDateObj_ === 'function'
               ? getNextWorkingDateObj_(new Date(), nextDays)
               : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + nextDays);
+            const nextFollowUp = typeof getSmartBalancedDeadlineObj_ === 'function'
+              ? getSmartBalancedDeadlineObj_(targetSheet, rawNextFollowUp, timeZone, actualRow)
+              : rawNextFollowUp;
             const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, 'yyyy-MM-dd');
 
             const todayIso = Utilities.formatDate(new Date(), timeZone, 'yyyy-MM-dd');

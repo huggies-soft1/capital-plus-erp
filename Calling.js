@@ -290,7 +290,7 @@ function handleCallingSheetEdit(e, sheet) {
   const existingIsoDeadline = existingDlObj.isoDate;
 
   // === ЗАЩИТА ПРАВИЛА №6: ЗАПРЕТ РУЧНОГО ПЕРЕВОДА В КИТЫ ===
-  if (decision.includes("кит") || decision.includes("золот")) {
+  if (sheetName !== "4.Архив лидов" && (decision.includes("кит") || decision.includes("золот"))) {
     sheet.getRange(row, 13).clearContent();
     ss.toast(
       "В «Киты» клиент попадает ТОЛЬКО автоматически после оплаты заказа! Выберите «В Ожидание» или «Горящая заявка».",
@@ -578,13 +578,17 @@ function handleCallingSheetEdit(e, sheet) {
   // === ВЕТКА 4: НЕДОЗВОН (Каскад 1 -> 3 -> 7 дней; Ожидание и Киты защищены от авто-сброса в Архив на 4/4!) ===
   if (decision.includes("недозвон") || decision.includes("не дозвон") || decision.includes("сброс") || decision.includes("не берет")) {
     const isProtectedFromAutoArchive = isWhaleSheet || (sheetName === "3. Лист ожидания");
-    const allMissMatches = Array.from(history.matchAll(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4(?:\s*-\s*[^\]]+)?\]/gi));
+    const histLines = history.split('\n').map(l => l.trim()).filter(Boolean);
     let attempts = 0;
-    if (allMissMatches.length > 0) {
-      attempts = Math.max(...allMissMatches.map(m => parseInt(m[1], 10) || 0));
-    } else {
-      const legacyMatch = history.match(/(?:^|\n|\[)\s*(\d+)\s*недозвон/i);
-      if (legacyMatch) attempts = parseInt(legacyMatch[1], 10) || 0;
+    for (let i = 0; i < histLines.length; i++) {
+      const ln = histLines[i];
+      if (/Горящая|В Ожидание|Плановый контакт|Сдвиг спроса|Купил у других|Сезон:|Перезвонить после|Проход секретаря/i.test(ln)) {
+        break; // После живого контакта счётчик недозвонов начинается заново
+      }
+      const m = ln.match(/\[(?:📞\s*)?Недозвон:\s*(\d+)\/4/i);
+      if (m) {
+        attempts = Math.max(attempts, parseInt(m[1], 10) || 0);
+      }
     }
     attempts += 1;
 
@@ -1385,13 +1389,17 @@ function computeDynamicTacticForRow_(rowVals, stockEntriesMap, companyDossierNot
   let lastFollowUpDate = '';
 
   const now = new Date();
+  const isRealKpLine_ = (l) => !/Черновик/i.test(l) && /^\[(?:📧|💬|📄|📋)?\s*(?:Прайс|КП\b|Выгружен PDF|Отправлено)/i.test(l);
+  const isRealRemLine_ = (l) => !/Черновик/i.test(l) && /^\[(?:💬\s*)?(?:Напоминалка|Дожим)/i.test(l);
+  const extractLogEndDate_ = (l) => l.match(/-\s*(\d{2})\.(\d{2})\.(\d{4})(?:\s+\d{2}:\d{2})?\]$/) || l.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+
   lines.forEach(l => {
-    if (!lastFollowUpDate && /Напоминалка|Дожим/i.test(l)) {
-      const mRem = l.match(/(\d{2}\.\d{2}\.\d{4})/);
-      if (mRem) lastFollowUpDate = mRem[1];
+    if (!lastFollowUpDate && isRealRemLine_(l)) {
+      const mRem = extractLogEndDate_(l);
+      if (mRem) lastFollowUpDate = `${mRem[1]}.${mRem[2]}.${mRem[3]}`;
     }
-    if (!lastKpDate && /📧|💬|📄|Прайс|КП/i.test(l)) {
-      const mKp = l.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    if (!lastKpDate && isRealKpLine_(l)) {
+      const mKp = extractLogEndDate_(l);
       if (mKp) {
         lastKpDate = `${mKp[1]}.${mKp[2]}.${mKp[3]}`;
         const dt = new Date(parseInt(mKp[3], 10), parseInt(mKp[2], 10) - 1, parseInt(mKp[1], 10));
@@ -1407,7 +1415,7 @@ function computeDynamicTacticForRow_(rowVals, stockEntriesMap, companyDossierNot
       ? (daysSinceKp > 21 ? `${daysSinceKp} дн. — УСТАРЕЛ` : `${daysSinceKp} дн.`)
       : '';
     statusParts.push(`Прайс от ${lastKpDate}${ageLabel ? ' (' + ageLabel + ')' : ''}`);
-  } else if (/📧|💬|📄|Прайс|КП/i.test(history)) {
+  } else if (lines.some(isRealKpLine_)) {
     statusParts.push('Прайс отправлен');
   } else {
     statusParts.push('ПРАЙС НЕ ВЫСЫЛАЛСЯ');

@@ -1164,9 +1164,12 @@ ${userSignature.html}
             const curHistory = String(targetSheet.getRange(actualRow, 14).getValue() || '').trim();
             targetSheet.getRange(actualRow, 14).setValue(curHistory ? `${tag}\n${curHistory}` : tag);
 
-            const nextFollowUp = typeof getNextWorkingDateObj_ === 'function'
-              ? getNextWorkingDateObj_(new Date(), 2)
-              : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
+            const rawNextFollowUp = typeof getNextWorkingDateObj_ === 'function'
+            ? getNextWorkingDateObj_(new Date(), 2)
+            : new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() + 2);
+            const nextFollowUp = typeof getSmartBalancedDeadlineObj_ === 'function'
+            ? getSmartBalancedDeadlineObj_(targetSheet, rawNextFollowUp, timeZone, actualRow)
+            : rawNextFollowUp;
             const nextFollowUpIso = Utilities.formatDate(nextFollowUp, timeZone, "yyyy-MM-dd");
 
             const todayIso = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd");
