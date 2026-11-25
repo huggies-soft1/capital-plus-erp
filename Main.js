@@ -1,6 +1,6 @@
 /**
- * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.3)
- * Файл: Main.js — Чистое главное меню (5 базовых листов), утилиты и маршрутизатор триггеров.
+ * ЕДИНЫЙ ЦЕНТР УПРАВЛЕНИЯ ПРОДАЖАМИ И СКЛАДОМ (CTRM «Капитал-Плюс» v7.4)
+ * Файл: Main.js — Боевое меню (CRM + Склад + Закупки), авто-синхронизация и маршрутизатор триггеров.
  */
 
 function isWarehouseSheetName_(name) {
@@ -19,19 +19,38 @@ function isCrmSheetName_(name) {
   return targets.includes(compact);
 }
 
+function isSupplySheetName_(name) {
+  const clean = String(name || '').toLowerCase().trim();
+  return clean === '7. закупки' || clean === '7.1 заводы и поставщики';
+}
+
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Управление')
-    .addItem('Открыть калькулятор отгрузки (ГОСТ / Весы / Торг)', 'openCalculatorSidebar')
-    .addItem('Сформировать прайс-лист (HTML / PDF)', 'openPriceListModal')
-    .addItem('Напоминалка и Карта партнёра (HTML / Мессенджер)', 'openFollowUpModal')
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Управление')
+    .addItem('Калькулятор (Отгрузка / Приёмка / Цех)', 'openCalculatorSidebar')
+    .addItem('Прайс-лист и КП (HTML / PDF)', 'openPriceListModal')
+    .addItem('Напоминалка и Карта партнёра', 'openFollowUpModal')
     .addSeparator()
     .addItem('Обратный Радар: кому продать этот Ø?', 'openReverseRadarForActivePipe')
-    .addItem('Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
-    .addItem('Обновить очередь и дедлайны (все листы)', 'refreshAllCrmQueuesManual')
-    .addSeparator()
-    .addItem('Отсортировать склад по диаметрам', 'sortWarehouseData')
     .addItem('Добавить клиента в Контакты (iPhone)', 'addSelectedRowToContacts')
+    .addSeparator()
+    .addSubMenu(
+      ui.createMenu('Закупки (Заводы и рынок)')
+        .addItem('Загрузить цены и остатки заводов из Gmail', 'syncFactoryPricesFromGmail')
+        .addItem('Собрать дефицит из CRM (Киты + Ожидание)', 'collectDeficitFromCRM')
+        .addItem('Создать черновики запросов (RFQ) заводам', 'createRfqDraftsForDeficit')
+        .addSeparator()
+        .addItem('Обратный Радар по «7. Закупки»', 'matchSupplyWithDemand')
+        .addItem('Оприходовать выбранный лот на Склад (MTC Gate)', 'receiveSupplyLotToWarehouse')
+    )
+    .addSubMenu(
+      ui.createMenu('Сервис')
+        .addItem('Радар: сверить Склад ↔ Ожидание и Киты', 'matchWarehouseWithWaitingList')
+        .addItem('Обновить очередь и дедлайны (все листы)', 'refreshAllCrmQueuesManual')
+        .addItem('Отсортировать склад по диаметрам', 'sortWarehouseData')
+        .addSeparator()
+        .addItem('Инициализировать / обновить листы Закупок', 'setupSupplySystem')
+    )
     .addToUi();
 
   try {
@@ -61,6 +80,19 @@ function onOpen() {
     activeSheet.setActiveSelection(activeSheet.getRange(safeRow, safeCol));
     ss.toast(`Лист «${actName}» отсортирован — можно работать`, 'Очередь готова', 3);
   } catch (e) {}
+}
+
+/**
+ * Фоновая автосинхронизация (можно повесить на триггер по времени раз в 2 часа):
+ * парсит свежие письма заводов из Gmail, собирает дефицит CRM и обновляет раскраску.
+ */
+function runAutoSupplySync() {
+  if (typeof syncFactoryPricesFromGmail === 'function') {
+    try { syncFactoryPricesFromGmail(); } catch (e) {}
+  }
+  if (typeof collectDeficitFromCRM === 'function') {
+    try { collectDeficitFromCRM(); } catch (e) {}
+  }
 }
 
 function refreshAllCrmQueuesManual() {
@@ -170,6 +202,10 @@ function onEdit(e) {
     }
     if (typeof handleWarehouseSheetEdit === 'function') {
       handleWarehouseSheetEdit(e, sheet);
+    }
+  } else if (isSupplySheetName_(sheetName)) {
+    if (typeof handleSupplySheetEdit === 'function') {
+      handleSupplySheetEdit(e, sheet);
     }
   }
 }
